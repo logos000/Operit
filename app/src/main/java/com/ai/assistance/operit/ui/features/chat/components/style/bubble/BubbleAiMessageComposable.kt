@@ -95,7 +95,7 @@ fun BubbleAiMessageComposable(
         verticalAlignment = Alignment.Top
     ) {
         // Avatar
-        if (aiAvatarUri != null) {
+        if (!aiAvatarUri.isNullOrEmpty()) {
             Image(
                 painter = rememberAsyncImagePainter(model = Uri.parse(aiAvatarUri)),
                 contentDescription = "AI Avatar",

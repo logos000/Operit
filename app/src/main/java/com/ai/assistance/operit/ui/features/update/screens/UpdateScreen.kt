@@ -69,6 +69,38 @@ data class UpdateInfo(
 
 val updates = listOf(
     UpdateInfo(
+        version = "v1.3.0",
+        date = "2025-08-04",
+        title = "界面焕新与Agent能力跃升",
+        description = "本次更新聚焦于界面美化与AI核心能力增强。我们重做了主题系统，并对设置界面进行优化，同时AI Agent在记忆、工具使用和稳定性上都获得了显著提升。",
+        highlights = listOf(
+            "🎨 界面焕新：设置界面优化，主题支持高度自定义。",
+            "💡 体验增强：AI输出时屏幕常亮，优化开屏加载，语音聊天增加AI头像。",
+            "🚀 内置MCP包：原生集成12306、Tavily等服务，无需再手动部署。",
+            "🛠️ 包管理优化：现在可以真正删除和修复外部包了。",
+            "🤖 Agent能力跃升：记忆编辑更强大，支持Gemini原生思考，增加浏览器操作及网络重试。"
+        ),
+        allChanges = listOf(
+            "优化设置界面，优化token统计",
+            "增加ai输出时的屏幕常亮",
+            "优化开屏加载，现在不会影响使用",
+            "增加语音聊天的ai头像",
+            "内置 12306 tavily duckduckgo 的mcp包，再也不用termux启动部署了",
+            "支持原生包的删除功能，修复原生包的导入功能",
+            "增加mcp的http sse远程配置",
+            "修改ai记忆和编辑重发现在支持文本添加和纯文本编辑",
+            "gemini原生 think支持",
+            "增加记忆链接文档的功能",
+            "增加输入token超出提示，优化token的上下文控制能力",
+            "现在apply file工具可以更好地在文件内删除文本了",
+            "增加ai的网络断开重试机制",
+            "增加ai内置浏览器操作能力(部分)"
+        ),
+        isLatest = true,
+        downloadUrl = "https://github.com/AAswordman/Operit/releases/tag/v1.3.0",
+        releaseUrl = "https://github.com/AAswordman/Operit/releases/tag/v1.3.0"
+    ),
+    UpdateInfo(
         version = "v1.2.3",
         date = "2025-07-25",
         title = "记忆库升级与AI能力增强",
@@ -94,7 +126,7 @@ val updates = listOf(
             "统计消息的窗口大小计算修复",
             "增加临时文件夹的nomedia"
         ),
-        isLatest = true,
+        isLatest = false,
         downloadUrl = "https://github.com/AAswordman/Operit/releases/tag/v1.2.3",
         releaseUrl = "https://github.com/AAswordman/Operit/releases/tag/v1.2.3"
     ),
@@ -210,7 +242,7 @@ val updates = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UpdateScreen() {
+fun UpdateScreen(onNavigateToThemeSettings: () -> Unit) {
     val context = LocalContext.current
 
     LazyColumn(
@@ -229,7 +261,8 @@ fun UpdateScreen() {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
                     context.startActivity(intent)
-                }
+                },
+                onNavigateToThemeSettings = onNavigateToThemeSettings
             )
         }
     }
@@ -239,7 +272,8 @@ fun UpdateScreen() {
 fun UpdateCard(
     updateInfo: UpdateInfo,
     isFirst: Boolean = false,
-    onOpenRelease: (String) -> Unit
+    onOpenRelease: (String) -> Unit,
+    onNavigateToThemeSettings: () -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     
@@ -371,12 +405,27 @@ fun UpdateCard(
             Spacer(modifier = Modifier.height(8.dp))
             
             updateInfo.highlights.forEach { highlight ->
-                Text(
-                    text = highlight,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = highlight,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(bottom = 4.dp).weight(1f),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    if (updateInfo.version == "v1.3.0" && highlight.contains("界面焕新")) {
+                        Button(
+                            onClick = onNavigateToThemeSettings,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        ) {
+                            Text("前往配置")
+                        }
+                    }
+                }
             }
             
             // 展开查看更多

@@ -19,12 +19,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Videocam
@@ -1573,21 +1575,55 @@ fun ThemeSettingsScreen() {
                     Column {
                         Divider(modifier = Modifier.padding(vertical = 8.dp))
                         Text(
-                            text = "圆角半径: ${avatarCornerRadiusInput.toInt()}dp",
+                            text = "头像圆角",
                             style = MaterialTheme.typography.titleMedium,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
-                        Slider(
-                            value = avatarCornerRadiusInput,
-                            onValueChange = { avatarCornerRadiusInput = it },
-                            valueRange = 0f..16f,
-                            onValueChangeFinished = {
-                                scope.launch {
-                                    preferencesManager.saveThemeSettings(avatarCornerRadius = avatarCornerRadiusInput)
-                                    showSaveSuccessMessage = true
-                                }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    val newValue = (avatarCornerRadiusInput - 1f).coerceIn(0f, 16f)
+                                    avatarCornerRadiusInput = newValue
+                                    scope.launch {
+                                        preferencesManager.saveThemeSettings(avatarCornerRadius = newValue)
+                                        showSaveSuccessMessage = true
+                                    }
+                                },
+                                shape = CircleShape,
+                                contentPadding = PaddingValues(0.dp),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(Icons.Default.Remove, contentDescription = "减小圆角")
                             }
-                        )
+
+                            Text(
+                                text = "${avatarCornerRadiusInput.toInt()} dp",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 24.dp)
+                            )
+
+                            OutlinedButton(
+                                onClick = {
+                                    val newValue = (avatarCornerRadiusInput + 1f).coerceIn(0f, 16f)
+                                    avatarCornerRadiusInput = newValue
+                                    scope.launch {
+                                        preferencesManager.saveThemeSettings(avatarCornerRadius = newValue)
+                                        showSaveSuccessMessage = true
+                                    }
+                                },
+                                shape = CircleShape,
+                                contentPadding = PaddingValues(0.dp),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "增大圆角")
+                            }
+                        }
                     }
                 }
             }

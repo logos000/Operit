@@ -44,6 +44,11 @@ class GeminiProvider(
     private var activeCall: Call? = null
     @Volatile private var isManuallyCancelled = false
 
+    /**
+     * 不可重试的异常，通常由客户端错误（如4xx状态码）引起
+     */
+    class NonRetriableException(message: String, cause: Throwable? = null) : IOException(message, cause)
+
     // Token计数
     private var _inputTokenCount = 0
     private var _outputTokenCount = 0
@@ -247,6 +252,11 @@ class GeminiProvider(
                         if (!response.isSuccessful) {
                             val errorBody = response.body?.string() ?: "无错误详情"
                             logError("API请求失败: ${response.code}, $errorBody")
+                            // 对于4xx这类明确的客户端错误，直接抛出，不进行重试
+                            if (response.code in 400..499) {
+                                throw NonRetriableException("API请求失败: ${response.code}, $errorBody")
+                            }
+                            // 对于5xx等服务端错误，允许重试
                             throw IOException("API请求失败: ${response.code}, $errorBody")
                         }
 
@@ -257,6 +267,9 @@ class GeminiProvider(
 
                 activeCall = null
                 return@stream
+            } catch (e: NonRetriableException) {
+                logError("发生不可重试错误", e)
+                throw e // 直接抛出，不重试
             } catch (e: SocketTimeoutException) {
                 if (isManuallyCancelled) {
                     logError("请求被用户取消，停止重试。")
@@ -306,14 +319,8 @@ class GeminiProvider(
                     throw UserCancellationException("请求已被用户取消", e)
                 }
                 lastException = e
-                retryCount++
-                 if (retryCount >= maxRetries) {
-                    logError("未知异常且达到最大重试次数", e)
-                    throw IOException("AI响应获取失败: ${e.message}")
-                }
-                logError("发送消息时发生异常，尝试重试 $retryCount/$maxRetries", e)
-                onNonFatalError("【连接失败，正在进行第 $retryCount 次重试...】")
-                delay(1000L * (1 shl (retryCount - 1)))
+                logError("发送消息时发生未知异常，不进行重试", e)
+                throw IOException("AI响应获取失败: ${e.message}", e)
             }
         }
 

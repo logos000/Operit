@@ -175,7 +175,11 @@ class MessageProcessingDelegate(
                 // 更新当前响应流，使其可以被其他组件（如悬浮窗）访问
                 currentResponseStream = sharedCharStream
 
-                aiMessage = ChatMessage(sender = "ai", contentStream = sharedCharStream)
+                aiMessage = ChatMessage(
+                    sender = "ai", 
+                    contentStream = sharedCharStream,
+                    timestamp = System.currentTimeMillis()+50
+                )
                 Log.d(
                     TAG,
                     "创建带流的AI消息, stream is null: ${aiMessage.contentStream == null}, timestamp: ${aiMessage.timestamp}"

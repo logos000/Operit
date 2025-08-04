@@ -37,6 +37,11 @@ open class OpenAIProvider(
     private var activeCall: Call? = null
     @Volatile private var isManuallyCancelled = false
 
+    /**
+     * 不可重试的异常，通常由客户端错误（如4xx状态码）引起
+     */
+    class NonRetriableException(message: String, cause: Throwable? = null) : IOException(message, cause)
+
     // 添加token计数器
     private var _inputTokenCount = 0
     private var _outputTokenCount = 0
@@ -336,7 +341,11 @@ open class OpenAIProvider(
                     if (!response.isSuccessful) {
                         val errorBody = response.body?.string() ?: "No error details"
                         Log.e("AIService", "【发送消息】API请求失败，状态码: ${response.code}，错误信息: $errorBody")
-                        // 对于4xx/5xx这类明确的API错误，直接抛出，不进行续写重试
+                        // 对于4xx这类明确的客户端错误，直接抛出，不进行重试
+                        if (response.code in 400..499) {
+                            throw NonRetriableException("API请求失败，状态码: ${response.code}，错误信息: $errorBody")
+                        }
+                        // 对于5xx等服务端错误，允许重试
                         throw IOException("API请求失败，状态码: ${response.code}，错误信息: $errorBody")
                     }
 
@@ -550,6 +559,9 @@ open class OpenAIProvider(
                         "【发送消息】请求成功完成，输入token: $_inputTokenCount，输出token: $_outputTokenCount"
                 )
                 return@stream
+            } catch (e: NonRetriableException) {
+                Log.e("AIService", "【发送消息】发生不可重试错误", e)
+                throw e // 直接抛出，不重试
             } catch (e: SocketTimeoutException) {
                 if (isManuallyCancelled) {
                     Log.d("AIService", "请求被用户取消，停止重试。")
@@ -600,16 +612,9 @@ open class OpenAIProvider(
                     Log.d("AIService", "请求被用户取消，停止重试。")
                     throw UserCancellationException("请求已被用户取消", e)
                 }
-                 // 其他未知异常，也尝试重试
-                lastException = e
-                retryCount++
-                if (retryCount >= maxRetries) {
-                    Log.e("AIService", "【发送消息】发生未知异常且达到最大重试次数", e)
-                    throw IOException("AI响应获取失败: ${e.message}")
-                }
-                Log.e("AIService", "【发送消息】连接失败，正在进行第 $retryCount 次重试...", e)
-                onNonFatalError("【连接失败，正在进行第 $retryCount 次重试...】")
-                delay(1000L * (1 shl (retryCount - 1)))
+                 // 其他未知异常，不应重试
+                Log.e("AIService", "【发送消息】发生未知异常，停止重试", e)
+                throw IOException("AI响应获取失败: ${e.message}", e)
             }
         }
 

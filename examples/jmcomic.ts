@@ -63,7 +63,7 @@ METADATA
                 },
                 {
                     "name": "download_dir",
-                    "description": "下载目录 (可选, 默认: downloads)",
+                    "description": "下载目录 (可选, 默认: /sdcard/Download/OperitScripts)",
                     "type": "string",
                     "required": false
                 }
@@ -81,7 +81,7 @@ METADATA
                 },
                 {
                     "name": "download_dir",
-                    "description": "下载目录 (可选, 默认: downloads)",
+                    "description": "下载目录 (可选, 默认: /sdcard/Download/OperitScripts)",
                     "type": "string",
                     "required": false
                 }
