@@ -46,7 +46,6 @@ abstract class AppDatabase : RoomDatabase() {
                                 `updatedAt` INTEGER NOT NULL,
                                 `inputTokens` INTEGER NOT NULL DEFAULT 0,
                                 `outputTokens` INTEGER NOT NULL DEFAULT 0,
-                                `currentWindowSize` INTEGER NOT NULL DEFAULT 0,
                                 PRIMARY KEY(`id`)
                             )
                         """.trimIndent())
@@ -103,8 +102,12 @@ abstract class AppDatabase : RoomDatabase() {
         private val MIGRATION_5_6 =
                 object : Migration(5, 6) {
                     override fun migrate(db: SupportSQLiteDatabase) {
-                        // 向chats表添加actualContextWindowSize列
-                        db.execSQL("ALTER TABLE chats ADD COLUMN `currentWindowSize` INTEGER NOT NULL DEFAULT 0")
+                        // 检查currentWindowSize列是否已存在，如果不存在则添加
+                        try {
+                            db.execSQL("ALTER TABLE chats ADD COLUMN `currentWindowSize` INTEGER NOT NULL DEFAULT 0")
+                        } catch (_: Exception){
+
+                        }
                     }
                 }
 
