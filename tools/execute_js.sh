@@ -97,5 +97,8 @@ adb -s "$DEVICE_SERIAL" shell am broadcast -a com.ai.assistance.operit.EXECUTE_J
     --es params "$ESCAPED_PARAMS" \
     --ez temp_file true
 
-echo "Operation completed. Check logcat for results:"
-echo "adb -s $DEVICE_SERIAL logcat -s ScriptExecutionReceiver:* JsEngine:*" 
+echo "Waiting for execution to complete..."
+sleep 2
+
+echo "Capturing logcat output for JsEngine tag (Press Ctrl+C to stop):"
+adb -s "$DEVICE_SERIAL" logcat -s JsEngine:* 

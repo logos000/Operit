@@ -98,5 +98,8 @@ REM Execute JS function
 echo Executing [!FUNCTION_NAME!] with params: !PARAMS!
 adb -s "!DEVICE_SERIAL!" shell "am broadcast -a com.ai.assistance.operit.EXECUTE_JS -n com.ai.assistance.operit/.core.tools.javascript.ScriptExecutionReceiver --include-stopped-packages --es file_path '!TARGET_FILE!' --es function_name '!FUNCTION_NAME!' --es params '!PARAMS!' --ez temp_file true"
 
-echo Operation completed. Check logcat for results:
-echo adb -s !DEVICE_SERIAL! logcat -s ScriptExecutionReceiver:* JsEngine:*
+echo Waiting for execution to complete...
+timeout /t 2 >nul
+
+echo Capturing logcat output for JsEngine tag (Press Ctrl+C to stop):
+adb -s "!DEVICE_SERIAL!" logcat -s JsEngine:*
