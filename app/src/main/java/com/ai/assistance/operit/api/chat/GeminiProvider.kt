@@ -52,6 +52,9 @@ class GeminiProvider(
     // Token计数
     private var _inputTokenCount = 0
     private var _outputTokenCount = 0
+    
+    // 思考状态跟踪
+    private var isInThinkingMode = false
 
     override val inputTokenCount: Int
         get() = _inputTokenCount
@@ -74,6 +77,7 @@ class GeminiProvider(
     override fun resetTokenCounts() {
         _inputTokenCount = 0
         _outputTokenCount = 0
+        isInThinkingMode = false
     }
 
     override suspend fun calculateInputTokens(
@@ -191,7 +195,7 @@ class GeminiProvider(
     ): Stream<String> = stream {
         isManuallyCancelled = false
         val requestId = System.currentTimeMillis().toString()
-        // 重置token计数
+        // 重置token计数和思考状态
         resetTokenCounts()
         onTokensUpdated(_inputTokenCount, _outputTokenCount)
 
@@ -645,6 +649,13 @@ class GeminiProvider(
                 }
             }
 
+            // 确保思考模式正确结束
+            if (isInThinkingMode) {
+                logDebug("流结束时仍在思考模式，添加结束标签")
+                streamBuilder.emit("</think>")
+                isInThinkingMode = false
+            }
+            
             // 确保至少发送一次内容
             if (contentCount == 0) {
                 logDebug("未检测到内容，发送空格")
@@ -712,11 +723,25 @@ class GeminiProvider(
                 val isThought = part.optBoolean("thought", false)
 
                 if (text.isNotEmpty()) {
+                    // 处理思考模式状态切换
+                    if (isThought && !isInThinkingMode) {
+                        // 开始思考模式
+                        contentBuilder.append("<think>")
+                        isInThinkingMode = true
+                        logDebug("开始思考模式")
+                    } else if (!isThought && isInThinkingMode) {
+                        // 结束思考模式
+                        contentBuilder.append("</think>")
+                        isInThinkingMode = false
+                        logDebug("结束思考模式")
+                    }
+                    
+                    // 添加文本内容
+                    contentBuilder.append(text)
+                    
                     if (isThought) {
-                        contentBuilder.append("<think>").append(text).append("</think>")
                         logDebug("提取思考内容，长度=${text.length}")
                     } else {
-                        contentBuilder.append(text)
                         logDebug("提取文本，长度=${text.length}")
                     }
 

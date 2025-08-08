@@ -86,7 +86,7 @@ fun ModelApiSettingsSection(
                     "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions"
             ApiProviderType.ALIYUN ->
                     "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
-            ApiProviderType.XUNFEI -> "https://spark-api.xf-yun.com/v2.1/chat"
+            ApiProviderType.XUNFEI -> "https://spark-api-open.xf-yun.com/v2/chat/completions"
             ApiProviderType.ZHIPU ->
                     "https://open.bigmodel.cn/api/paas/v3/model-api/chatglm_pro/invoke"
             ApiProviderType.BAICHUAN -> "https://api.baichuan-ai.com/v1/chat/completions"
