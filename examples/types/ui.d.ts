@@ -3,8 +3,7 @@
  */
 
 import {
-    UIPageResultData, UIActionResultData, CombinedOperationResultData, SimplifiedUINode,
-    UiAutomationTaskResultData
+    UIPageResultData, UIActionResultData, CombinedOperationResultData, SimplifiedUINode
 } from './results';
 
 /**
@@ -23,16 +22,7 @@ export namespace UI {
      */
     function tap(x: number, y: number): Promise<UIActionResultData>;
 
-    /**
-     * Automate a complex UI task with a high-level goal description
-     * @param taskGoal - Natural language description of the task to accomplish
-     * @param options - Additional task options
-     */
-    function automateTask(taskGoal: string, options?: {
-        maxSteps?: number;
-        timeout?: number;
-        strictMode?: boolean;
-    }): Promise<UiAutomationTaskResultData>;
+
 
     /**
      * Click on an element

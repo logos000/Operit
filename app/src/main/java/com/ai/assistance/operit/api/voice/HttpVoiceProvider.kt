@@ -20,8 +20,10 @@ import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import android.media.AudioAttributes
 import com.ai.assistance.operit.data.preferences.SpeechServicesPreferences
@@ -102,13 +104,24 @@ class HttpVoiceProvider(
         }
         
         try {
-            // Basic validation to check if the template contains the required placeholder
-            if (!httpConfig.urlTemplate.contains("{text}")) {
-                 Log.e(TAG, "URL template must contain a {text} placeholder.")
+            val isPost = httpConfig.httpMethod.uppercase() == "POST"
+            val hasTextPlaceholder = if (isPost) {
+                httpConfig.requestBody.contains("{text}", ignoreCase = true)
+            } else {
+                httpConfig.urlTemplate.contains("{text}", ignoreCase = true)
+            }
+
+            if (!hasTextPlaceholder) {
+                val errorMessage = if (isPost) {
+                    "For POST requests, the request body template must contain a {text} placeholder."
+                } else {
+                    "For GET requests, the URL template must contain a {text} placeholder."
+                }
+                Log.e(TAG, errorMessage)
                 _isInitialized.value = false
                 return@withContext false
             }
-            // A simple check for a valid start. More complex validation is not necessary here.
+
             if (!httpConfig.urlTemplate.startsWith("http://") && !httpConfig.urlTemplate.startsWith("https://")) {
                 Log.e(TAG, "Invalid URL template scheme: ${httpConfig.urlTemplate}")
                 _isInitialized.value = false
@@ -301,7 +314,41 @@ class HttpVoiceProvider(
             val encodedPitch = pitch.toString()
             val encodedVoiceId = voiceId?.let { URLEncoder.encode(it, "UTF-8") } ?: ""
 
-            // Replace placeholders in the template
+            val requestBuilder = Request.Builder()
+
+            if (httpConfig.httpMethod.uppercase() == "POST") {
+                // For POST requests, use the URL as base and put parameters in body
+                val baseUrl = httpConfig.urlTemplate
+                val httpUrl = baseUrl.toHttpUrlOrNull()
+                if (httpUrl == null) {
+                    Log.e(TAG, "Base URL is invalid: $baseUrl")
+                    return@withContext null
+                }
+                
+                // Replace placeholders in the request body template
+                var requestBody = httpConfig.requestBody
+                    .replace("{text}", text, ignoreCase = true) // Don't encode for JSON body
+                    .replace("{rate}", encodedRate, ignoreCase = true)
+                    .replace("{pitch}", encodedPitch, ignoreCase = true)
+
+                if (voiceId != null) {
+                    requestBody = requestBody.replace("{voice}", voiceId, ignoreCase = true)
+                }
+
+                // Replace any extra parameters
+                extraParams.forEach { (key, value) ->
+                    requestBody = requestBody.replace("{$key}", value, ignoreCase = true)
+                }
+
+                val mediaType = httpConfig.contentType.toMediaType()
+                val body = requestBody.toRequestBody(mediaType)
+                
+                requestBuilder
+                    .url(httpUrl)
+                    .post(body)
+                    .addHeader("Content-Type", httpConfig.contentType)
+            } else {
+                // For GET requests, use the existing logic with URL parameters
             var finalUrl = httpConfig.urlTemplate
                 .replace("{text}", encodedText, ignoreCase = true)
                 .replace("{rate}", encodedRate, ignoreCase = true)
@@ -322,9 +369,10 @@ class HttpVoiceProvider(
                 return@withContext null
             }
             
-            val requestBuilder = Request.Builder()
+                requestBuilder
                 .url(httpUrl)
                 .get()
+            }
             
             // Add API key if present
             if (httpConfig.apiKey.isNotBlank()) {

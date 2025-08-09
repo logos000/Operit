@@ -120,7 +120,7 @@ object FunctionalPrompts {
     """
 
     /**
-     * Prompt for the UI Controller AI to analyze UI state and return a single action command.
+     * Prompt for UI Controller AI to analyze UI state and return a single action command.
      */
     const val UI_CONTROLLER_PROMPT = """
         You are a UI automation AI. Your task is to analyze the UI state and task goal, then decide on the next single action. You must return a single JSON object containing your reasoning and the command to execute.
@@ -157,18 +157,5 @@ object FunctionalPrompts {
         Analyze the inputs, choose the best action to achieve the `Task Goal`, and formulate your response in the specified JSON format. Use element `bounds` to calculate coordinates for UI actions.
     """
 
-    /**
-     * Prompt for an AI to classify a web automation task goal into a specific category.
-     */
-    const val WEB_TASK_CLASSIFICATION_PROMPT = """
-        You are a task classification expert. Your job is to analyze a user's goal for web automation and classify it into one of the following categories. Return ONLY the category name.
 
-        Categories:
-        - `INFORMATION_GATHERING`: The user wants to find and extract specific pieces of information (e.g., "Find the address of the main library," "What is the price of this item?").
-        - `EXPLORATION`: The user wants to browse, read, or get a summary about a general topic without a specific transactional goal (e.g., "See what's new on that site," "Explore travel guides for Paris").
-        - `TRANSACTIONAL`: The user wants to perform a concrete action that changes a state, such as logging in, booking something, filling out a form, or making a purchase (e.g., "Book a flight to New York," "Log in with my credentials," "Submit the contact form").
-        - `GENERAL_INTERACTION`: The user's goal is a simple, direct action or doesn't clearly fit the other categories (e.g., "Go to google.com," "Click the first link").
-
-        Analyze the user's task goal and return only the single most appropriate category name.
-    """
 } 

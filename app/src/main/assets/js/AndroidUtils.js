@@ -290,15 +290,15 @@ class Intent {
         }
 
         // Use the direct Tools.System.intent interface
-        const result = await Tools.System.intent(
-            this.action,
-            this.uri,
-            this.packageName,
-            componentName,
-            flags,
-            Object.keys(combinedExtras).length > 0 ? combinedExtras : null,
-            'activity' // Explicitly specify that this is an activity intent
-        );
+        const result = await Tools.System.intent({
+            action: this.action,
+            uri: this.uri,
+            package: this.packageName,
+            component: componentName,
+            flags: flags,
+            extras: Object.keys(combinedExtras).length > 0 ? combinedExtras : null,
+            type: 'activity' // Explicitly specify that this is an activity intent
+        });
 
         return result;
     }
@@ -334,15 +334,15 @@ class Intent {
         }
 
         // Use the direct Tools.System.intent interface with broadcast type
-        return await Tools.System.intent(
-            this.action,
-            this.uri,
-            this.packageName,
-            componentName,
-            null, // No special flags needed for broadcast
-            Object.keys(combinedExtras).length > 0 ? combinedExtras : null,
-            'broadcast' // Explicitly specify that this is a broadcast intent
-        );
+        return await Tools.System.intent({
+            action: this.action,
+            uri: this.uri,
+            package: this.packageName,
+            component: componentName,
+            flags: null, // No special flags needed for broadcast
+            extras: Object.keys(combinedExtras).length > 0 ? combinedExtras : null,
+            type: 'broadcast' // Explicitly specify that this is a broadcast intent
+        });
     }
 
     /**
@@ -373,15 +373,15 @@ class Intent {
         }
 
         // Use the direct Tools.System.intent interface with service type
-        return await Tools.System.intent(
-            this.action,
-            this.uri,
-            this.packageName,
-            componentName,
-            null, // No special flags needed for service
-            Object.keys(combinedExtras).length > 0 ? combinedExtras : null,
-            'service' // Explicitly specify that this is a service intent
-        );
+        return await Tools.System.intent({
+            action: this.action,
+            uri: this.uri,
+            package: this.packageName,
+            component: componentName,
+            flags: null, // No special flags needed for service
+            extras: Object.keys(combinedExtras).length > 0 ? combinedExtras : null,
+            type: 'service' // Explicitly specify that this is a service intent
+        });
     }
 }
 

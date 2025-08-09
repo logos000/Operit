@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import com.ai.assistance.operit.api.chat.EnhancedAIService
-import com.ai.assistance.operit.core.tools.WebAutomationTaskResultData
+
 import kotlinx.coroutines.flow.flow
 
 class ComputerDesktopToolExecutor(private val context: Context) {
@@ -71,37 +71,7 @@ class ComputerDesktopToolExecutor(private val context: Context) {
         }
     }
 
-    fun automateWebTask(tool: AITool): Flow<ToolResult> {
-        return flow {
-            val taskGoal = tool.parameters.find { it.name == "task_goal" }?.value ?: "No goal specified."
-            val enhancedAIService = EnhancedAIService.getInstance(context)
 
-            val executedCommands = mutableListOf<String>()
-
-            enhancedAIService.executeWebAutomationTask(taskGoal).map { stepResult ->
-                stepResult.command?.let { executedCommands.add(it.toString()) }
-
-                if (stepResult.command?.type == "complete" || stepResult.command?.type == "interrupt") {
-                    ToolResult(
-                        toolName = tool.name,
-                        success = stepResult.command.type == "complete",
-                        result = WebAutomationTaskResultData(
-                            taskGoal = taskGoal,
-                            finalState = stepResult.command.type,
-                            finalMessage = stepResult.explanation ?: "Task finished.",
-                            executedCommands = executedCommands
-                        )
-                    )
-                } else {
-                    ToolResult(
-                        toolName = tool.name,
-                        success = true, // Intermediate steps are considered successful
-                        result = StringResultData(stepResult.explanation ?: "Executing...")
-                    )
-                }
-            }.collect{ emit(it) }
-        }
-    }
 
     private fun getTabs(): ComputerDesktopActionResultData {
         val tabs = desktopManager.getTabs()

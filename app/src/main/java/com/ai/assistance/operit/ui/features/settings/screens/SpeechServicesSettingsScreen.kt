@@ -29,6 +29,7 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -74,11 +75,29 @@ fun SpeechServicesSettingsScreen(onBackPressed: () -> Unit) {
     var ttsUrlTemplateInput by remember(httpConfig) { mutableStateOf(httpConfig.urlTemplate) }
     var ttsApiKeyInput by remember(httpConfig) { mutableStateOf(httpConfig.apiKey) }
     var ttsHeadersInput by remember(httpConfig) { mutableStateOf(Json.encodeToString(httpConfig.headers)) }
+    var ttsHttpMethodInput by remember(httpConfig) { mutableStateOf(httpConfig.httpMethod) }
+    var ttsRequestBodyInput by remember(httpConfig) { mutableStateOf(httpConfig.requestBody) }
+    var ttsContentTypeInput by remember(httpConfig) { mutableStateOf(httpConfig.contentType) }
     var ttsJsonError by remember { mutableStateOf<String?>(null) }
 
     // --- State for STT Settings ---
     val sttServiceType by prefs.sttServiceTypeFlow.collectAsState(initial = SpeechServiceFactory.SpeechServiceType.SHERPA_NCNN)
     var sttServiceTypeInput by remember(sttServiceType) { mutableStateOf(sttServiceType) }
+
+    // 验证配置是否有效
+    fun isConfigurationValid(): Boolean {
+        return when (ttsServiceTypeInput) {
+            VoiceServiceFactory.VoiceServiceType.HTTP_TTS -> {
+                val basicValid = ttsJsonError == null && ttsUrlTemplateInput.isNotBlank()
+                if (ttsHttpMethodInput == "POST") {
+                    basicValid && ttsRequestBodyInput.isNotBlank() && ttsContentTypeInput.isNotBlank()
+                } else {
+                    basicValid
+                }
+            }
+            VoiceServiceFactory.VoiceServiceType.SIMPLE_TTS -> true
+        }
+    }
 
     // 保存设置的函数
     fun saveSettings() {
@@ -92,14 +111,25 @@ fun SpeechServicesSettingsScreen(onBackPressed: () -> Unit) {
         ttsJsonError = null
         
         scope.launch {
+            when (ttsServiceTypeInput) {
+                VoiceServiceFactory.VoiceServiceType.HTTP_TTS -> {
             prefs.saveTtsSettings(
                 serviceType = ttsServiceTypeInput,
                 httpConfig = SpeechServicesPreferences.TtsHttpConfig(
                     urlTemplate = ttsUrlTemplateInput,
                     apiKey = ttsApiKeyInput,
-                    headers = headersMap
+                            headers = headersMap,
+                            httpMethod = ttsHttpMethodInput,
+                            requestBody = ttsRequestBodyInput,
+                            contentType = ttsContentTypeInput
                 )
             )
+                }
+                VoiceServiceFactory.VoiceServiceType.SIMPLE_TTS -> {
+                    prefs.saveTtsSettings(serviceType = ttsServiceTypeInput)
+                }
+            }
+            
             prefs.saveSttSettings(
                 serviceType = sttServiceTypeInput
             )
@@ -273,7 +303,7 @@ fun SpeechServicesSettingsScreen(onBackPressed: () -> Unit) {
                                         }
                                     },
                                     label = { Text("自定义请求头 (JSON)") },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                                     isError = ttsJsonError != null,
                                     supportingText = {
                                         if (ttsJsonError != null) {
@@ -284,6 +314,57 @@ fun SpeechServicesSettingsScreen(onBackPressed: () -> Unit) {
                                     },
                                     minLines = 2
                                 )
+                                
+                                // HTTP方法选择
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "HTTP 方法:",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.padding(end = 16.dp)
+                                    )
+                                    Row {
+                                        FilterChip(
+                                            onClick = { ttsHttpMethodInput = "GET" },
+                                            label = { Text("GET") },
+                                            selected = ttsHttpMethodInput == "GET",
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        )
+                                        FilterChip(
+                                            onClick = { ttsHttpMethodInput = "POST" },
+                                            label = { Text("POST") },
+                                            selected = ttsHttpMethodInput == "POST"
+                                        )
+                                    }
+                                }
+                                
+                                // POST请求的额外配置
+                                AnimatedVisibility(visible = ttsHttpMethodInput == "POST") {
+                                    Column {
+                                        OutlinedTextField(
+                                            value = ttsContentTypeInput,
+                                            onValueChange = { ttsContentTypeInput = it },
+                                            label = { Text("Content-Type") },
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                            placeholder = { Text("application/json") },
+                                            singleLine = true
+                                        )
+                                        
+                                        OutlinedTextField(
+                                            value = ttsRequestBodyInput,
+                                            onValueChange = { ttsRequestBodyInput = it },
+                                            label = { Text("请求体模板") },
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                            placeholder = { Text("{\"text\": \"{text}\", \"voice\": \"{voice}\"}") },
+                                            supportingText = {
+                                                Text("使用 {text}, {rate}, {pitch}, {voice} 作为占位符。")
+                                            },
+                                            minLines = 3
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -433,7 +514,7 @@ fun SpeechServicesSettingsScreen(onBackPressed: () -> Unit) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             SettingsInfoRow(
                                 title = "文本转语音 (TTS)",
-                                description = "TTS 服务将文本转换为语音。您可以使用内置的系统 TTS 引擎，或连接到远程 HTTP API。"
+                                description = "TTS 服务将文本转换为语音。您可以使用内置的系统 TTS 引擎或连接到远程 HTTP API。"
                             )
                             
                             Divider(
@@ -481,7 +562,7 @@ fun SpeechServicesSettingsScreen(onBackPressed: () -> Unit) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = { saveSettings() },
-                    enabled = ttsJsonError == null,
+                    enabled = isConfigurationValid(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.Save, contentDescription = null)

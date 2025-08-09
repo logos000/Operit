@@ -12,7 +12,7 @@ import {
     DeviceInfoResultData, NotificationData, LocationData,
     UIPageResultData, UIActionResultData, CombinedOperationResultData,
     CalculationResultData, FFmpegResultData, ADBResultData, IntentResultData, TerminalCommandResultData,
-    FilePartContentData, FileApplyResultData, UiAutomationTaskResultData
+    FilePartContentData, FileApplyResultData
 } from './results';
 
 // ============================================================================
@@ -44,7 +44,7 @@ export type SystemToolName = 'sleep' | 'get_system_setting' | 'modify_system_set
  * UI tool names
  */
 export type UiToolName = 'get_page_info' | 'click_element' | 'tap' | 'set_input_text' | 'press_key' |
-    'swipe' | 'combined_operation' | 'find_element' | 'automate_ui_task';
+    'swipe' | 'combined_operation' | 'find_element';
 
 /**
  * Calculator tool names
@@ -133,7 +133,6 @@ export interface ToolResultMap {
     'swipe': UIActionResultData;
     'combined_operation': CombinedOperationResultData;
     'find_element': UIPageResultData;
-    'automate_ui_task': UiAutomationTaskResultData;
 
     // Calculator operations
     'calculate': CalculationResultData;

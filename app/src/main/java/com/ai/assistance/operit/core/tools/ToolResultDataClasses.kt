@@ -796,47 +796,7 @@ data class LocationData(
     }
 }
 
-/** Represents the result of a UI automation task */
-@Serializable
-data class UiAutomationTaskResultData(
-    val taskGoal: String,
-    val finalState: String, // "completed", "interrupted"
-    val finalMessage: String,
-    val executedCommands: List<String>
-) : ToolResultData() {
-    override fun toString(): String {
-        val sb = StringBuilder()
-        sb.appendLine("UI Automation Task Result for: '$taskGoal'")
-        sb.appendLine("Final State: $finalState")
-        sb.appendLine("Message: $finalMessage")
-        sb.appendLine("\nExecuted Commands (${executedCommands.size}):")
-        executedCommands.forEach { command ->
-            sb.appendLine("- $command")
-        }
-        return sb.toString()
-    }
-}
 
-/** Represents the result of a web automation task */
-@Serializable
-data class WebAutomationTaskResultData(
-    val taskGoal: String,
-    val finalState: String, // "completed", "interrupted"
-    val finalMessage: String,
-    val executedCommands: List<String>
-) : ToolResultData() {
-    override fun toString(): String {
-        val sb = StringBuilder()
-        sb.appendLine("Web Automation Task Result for: '$taskGoal'")
-        sb.appendLine("Final State: $finalState")
-        sb.appendLine("Message: $finalMessage")
-        sb.appendLine("\nExecuted Commands (${executedCommands.size}):")
-        executedCommands.forEach { command ->
-            sb.appendLine("- $command")
-        }
-        return sb.toString()
-    }
-}
 
 /** Represents a simplified HTML node for computer desktop actions, focusing on interactability */
 @Serializable

@@ -28,7 +28,10 @@ class SpeechServicesPreferences(private val context: Context) {
     data class TtsHttpConfig(
         val urlTemplate: String,
         val apiKey: String, // Keep apiKey for header-based auth
-        val headers: Map<String, String>
+        val headers: Map<String, String>,
+        val httpMethod: String = "GET", // HTTP方法：GET 或 POST
+        val requestBody: String = "", // POST请求的body模板，支持占位符如{text}
+        val contentType: String = "application/json" // POST请求的Content-Type
     )
 
     companion object {
@@ -48,7 +51,10 @@ class SpeechServicesPreferences(private val context: Context) {
         val BAIDU_TTS_PRESET = TtsHttpConfig(
             urlTemplate = "https://fanyi.baidu.com/gettts?lan=zh&text={text}&spd={rate}&pit={pitch}",
             apiKey = "",
-            headers = emptyMap()
+            headers = emptyMap(),
+            httpMethod = "GET",
+            requestBody = "",
+            contentType = "application/json"
         )
     }
 
@@ -82,11 +88,20 @@ class SpeechServicesPreferences(private val context: Context) {
     // --- Save TTS Settings ---
     suspend fun saveTtsSettings(
         serviceType: VoiceServiceFactory.VoiceServiceType,
-        httpConfig: TtsHttpConfig
+        httpConfig: TtsHttpConfig? = null
     ) {
         dataStore.edit { prefs ->
             prefs[TTS_SERVICE_TYPE] = serviceType.name
-            prefs[TTS_HTTP_CONFIG] = Json.encodeToString(httpConfig)
+            
+            // 根据服务类型保存相应的配置
+            when (serviceType) {
+                VoiceServiceFactory.VoiceServiceType.HTTP_TTS -> {
+                    httpConfig?.let { prefs[TTS_HTTP_CONFIG] = Json.encodeToString(it) }
+                }
+                VoiceServiceFactory.VoiceServiceType.SIMPLE_TTS -> {
+                    // 系统 TTS 不需要额外配置
+                }
+            }
         }
     }
 

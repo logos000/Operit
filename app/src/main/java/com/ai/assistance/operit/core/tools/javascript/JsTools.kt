@@ -126,37 +126,14 @@ fun getJsToolsDefinition(): String {
                     return toolCall("execute_terminal", params);
                 },
                 // 执行Intent
-                intent: (options) => {
-                    // 支持新的单一参数对象方式和旧的多参数方式
-                    if (typeof options === "object") {
-                        return toolCall("execute_intent", options);
-                    }
-                    
-                    // 旧的多参数方式支持
-                    const [action, uri, pkg, component, flags, extras, type] = arguments;
-                    const params = {};
-                    if (action) params.action = action;
-                    if (uri) params.uri = uri;
-                    if (pkg) params.package = pkg;
-                    if (component) params.component = component;
-                    if (flags) params.flags = flags;
-                    if (extras) params.extras = typeof extras === 'object' ? JSON.stringify(extras) : extras;
-                    if (type) params.type = type;
-                    return toolCall("execute_intent", params);
+                intent: (options = {}) => {
+                    return toolCall("execute_intent", options);
                 }
             },
             // UI操作
             UI: {
                 getPageInfo: () => toolCall("get_page_info"),
                 tap: (x, y) => toolCall("tap", { x, y }),
-                // UI自动化任务
-                automateTask: (taskGoal, options = {}) => {
-                    const params = {
-                        task_goal: taskGoal,
-                        ...options
-                    };
-                    return toolCall("automate_ui_task", params);
-                },
                 // 增强的clickElement方法，支持多种参数类型
                 clickElement: function(param1, param2, param3) {
                     // 根据参数类型和数量判断调用方式

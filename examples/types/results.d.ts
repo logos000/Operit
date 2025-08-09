@@ -382,16 +382,7 @@ export interface CombinedOperationResultData {
     toString(): string;
 }
 
-/**
- * UI automation task result data
- */
-export interface UiAutomationTaskResultData {
-    taskGoal: string;
-    finalState: string; // "completed", "interrupted"
-    finalMessage: string;
-    executedCommands: string[];
-    toString(): string;
-}
+
 
 /**
  * ADB command execution result data
@@ -569,9 +560,7 @@ export interface UIActionResult extends BaseResult {
     data: UIActionResultData;
 }
 
-export interface UiAutomationTaskResult extends BaseResult {
-    data: UiAutomationTaskResultData;
-}
+
 
 export interface FileConversionResult extends BaseResult {
     data: FileConversionResultData;

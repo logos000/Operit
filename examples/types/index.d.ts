@@ -13,7 +13,7 @@ import {
     _UIActionResultData, _SimplifiedUINode, _FileOperationData, _DirectoryListingData,
     _FileContentData, _FileExistsData, _FindFilesResultData, _FileInfoData,
     _HttpResponseData, _VisitWebResultData, _CombinedOperationResultData,
-    _FilePartContentData, _FileApplyResultData, _UiAutomationTaskResultData
+    _FilePartContentData, _FileApplyResultData
 } from './results';
 import { Intent as AndroidIntent, IntentFlag as AndroidIntentFlag, IntentAction as AndroidIntentAction, IntentCategory as AndroidIntentCategory } from './android';
 import { UINode as UINodeClass, UI as UINamespace } from './ui';
@@ -100,7 +100,7 @@ declare global {
     type CombinedOperationResultData = _CombinedOperationResultData;
     type FilePartContentData = _FilePartContentData;
     type FileApplyResultData = _FileApplyResultData;
-    type UiAutomationTaskResultData = _UiAutomationTaskResultData;
+
 
     // Global interface definitions
     interface ToolParams {

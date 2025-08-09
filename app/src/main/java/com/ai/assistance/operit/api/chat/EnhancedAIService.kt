@@ -44,8 +44,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import com.ai.assistance.operit.data.model.UiControllerCommand
-import com.ai.assistance.operit.api.chat.enhance.AutomationStepResult
+
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -1452,59 +1451,7 @@ class EnhancedAIService private constructor(private val context: Context) {
         )
     }
 
-    /**
-     * Get the next UI command from the AI for UI automation.
-     *
-     * @param uiState A description of the current UI elements.
-     * @param taskGoal The objective for the current step.
-     * @param history A list of previous commands and results for context.
-     * @return A JSON string representing the AI's command.
-     */
-    suspend fun getUiControllerCommand(
-        uiState: String,
-        taskGoal: String,
-        history: List<Pair<String, String>>
-    ): String {
-        return conversationService.getUiControllerCommand(
-            uiState,
-            taskGoal,
-            history,
-            multiServiceManager
-        )
-    }
 
-    /**
-     * Executes a full UI automation task by repeatedly querying the AI and executing its commands.
-     *
-     * @param initialUiState The initial description of the UI.
-     * @param taskGoal The high-level goal for the entire task.
-     * @return A Flow of automation step results, including explanations and final UI state.
-     */
-    suspend fun executeUiAutomationTask(
-        initialUiState: String,
-        taskGoal: String
-    ): Flow<AutomationStepResult> {
-        return conversationService.executeUiAutomationTask(
-            initialUiState,
-            taskGoal,
-            multiServiceManager,
-            toolHandler
-        )
-    }
 
-    /**
-     * Executes a full web automation task by delegating to the ConversationService.
-     *
-     * @param taskGoal The high-level goal for the entire task.
-     * @return A Flow of automation step results.
-     */
-    suspend fun executeWebAutomationTask(
-        taskGoal: String
-    ): Flow<AutomationStepResult> {
-        return conversationService.executeWebAutomationTask(
-            taskGoal,
-            multiServiceManager,
-            toolHandler
-        )
-    }
+
 }

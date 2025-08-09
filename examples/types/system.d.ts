@@ -81,23 +81,17 @@ export namespace System {
 
     /**
      * Execute an Intent
-     * @param action - Intent action
-     * @param uri - Intent URI
-     * @param pkg - Package name
-     * @param component - Component name
-     * @param flags - Intent flags
-     * @param extras - Intent extras (as object or stringified JSON)
-     * @param type - Intent execution type: 'activity' (default), 'broadcast', or 'service'
+     * @param options - Intent options object
      */
-    function intent(
-        action?: string,
-        uri?: string,
-        pkg?: string,
-        component?: string,
-        flags?: number | string,
-        extras?: Record<string, any> | string,
-        type?: 'activity' | 'broadcast' | 'service'
-    ): Promise<IntentResultData>;
+    function intent(options?: {
+        action?: string;
+        uri?: string;
+        package?: string;
+        component?: string;
+        flags?: number | string;
+        extras?: Record<string, any> | string;
+        type?: 'activity' | 'broadcast' | 'service';
+    }): Promise<IntentResultData>;
 
     /**
      * Execute a terminal command and collect the output
