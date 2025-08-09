@@ -62,6 +62,9 @@ class ApiPreferences(private val context: Context) {
         // Custom Prompt Settings
         val CUSTOM_INTRO_PROMPT = stringPreferencesKey("custom_intro_prompt")
         val CUSTOM_TONE_PROMPT = stringPreferencesKey("custom_tone_prompt")
+        
+        // Custom System Prompt Template (Advanced Configuration)
+        val CUSTOM_SYSTEM_PROMPT_TEMPLATE = stringPreferencesKey("custom_system_prompt_template")
 
         // DeepSeek Model Parameters - Keys for values
         val MAX_TOKENS = intPreferencesKey("max_tokens")
@@ -124,6 +127,9 @@ class ApiPreferences(private val context: Context) {
         // Default values for custom prompts
         const val DEFAULT_INTRO_PROMPT = "你是Operit，一个全能AI助手，旨在解决用户提出的任何任务。你有各种工具可以调用，以高效完成复杂的请求。"
         const val DEFAULT_TONE_PROMPT = "保持有帮助的语气，并清楚地传达限制。使用问题库根据用户的风格、偏好和过去的信息个性化响应。"
+        
+        // Default system prompt template (empty means use built-in template)
+        const val DEFAULT_SYSTEM_PROMPT_TEMPLATE = ""
 
         // Default values for DeepSeek model parameters
         const val DEFAULT_MAX_TOKENS = 4096
@@ -321,6 +327,12 @@ class ApiPreferences(private val context: Context) {
     val customTonePromptFlow: Flow<String> =
             context.apiDataStore.data.map { preferences ->
                 preferences[CUSTOM_TONE_PROMPT] ?: DEFAULT_TONE_PROMPT
+            }
+
+    // Custom System Prompt Template Flow
+    val customSystemPromptTemplateFlow: Flow<String> =
+            context.apiDataStore.data.map { preferences ->
+                preferences[CUSTOM_SYSTEM_PROMPT_TEMPLATE] ?: DEFAULT_SYSTEM_PROMPT_TEMPLATE
             }
 
     // Flow for Custom Headers
@@ -742,11 +754,25 @@ class ApiPreferences(private val context: Context) {
         }
     }
 
+    // Save custom system prompt template
+    suspend fun saveCustomSystemPromptTemplate(template: String) {
+        context.apiDataStore.edit { preferences ->
+            preferences[CUSTOM_SYSTEM_PROMPT_TEMPLATE] = template
+        }
+    }
+
     // Reset custom prompts to default values
     suspend fun resetCustomPrompts() {
         context.apiDataStore.edit { preferences ->
             preferences[CUSTOM_INTRO_PROMPT] = DEFAULT_INTRO_PROMPT
             preferences[CUSTOM_TONE_PROMPT] = DEFAULT_TONE_PROMPT
+        }
+    }
+
+    // Reset custom system prompt template to default
+    suspend fun resetCustomSystemPromptTemplate() {
+        context.apiDataStore.edit { preferences ->
+            preferences[CUSTOM_SYSTEM_PROMPT_TEMPLATE] = DEFAULT_SYSTEM_PROMPT_TEMPLATE
         }
     }
 

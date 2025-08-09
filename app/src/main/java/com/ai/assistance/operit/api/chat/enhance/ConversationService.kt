@@ -171,6 +171,9 @@ class ConversationService(private val context: Context) {
                 val (introPrompt, tonePrompt) =
                         functionalPromptManager.getPromptForFunction(promptFunctionType)
 
+                // 获取自定义系统提示模板
+                val customSystemPromptTemplate = apiPreferences.customSystemPromptTemplateFlow.first()
+
                 // 获取系统提示词，现在传入workspacePath
                 val systemPrompt =
                         SystemPromptConfig.getSystemPromptWithCustomPrompts(
@@ -179,7 +182,8 @@ class ConversationService(private val context: Context) {
                         planningEnabled,
                         introPrompt,
                                 tonePrompt,
-                                thinkingGuidance
+                                thinkingGuidance,
+                                customSystemPromptTemplate
                 )
 
                 if (preferencesText.isNotEmpty()) {
@@ -845,3 +849,4 @@ Now, generate ONLY the complete and final merged file content.
         return AITool(type, parameters)
     }
 }
+

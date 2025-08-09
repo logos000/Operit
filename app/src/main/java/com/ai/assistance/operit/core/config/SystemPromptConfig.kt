@@ -413,6 +413,9 @@ object SystemPromptConfig {
    * @param packageManager The PackageManager instance to get package information from
    * @param workspacePath The current workspace path, if available.
    * @param enablePlanning Whether planning mode is enabled
+   * @param useEnglish Whether to use English or Chinese version
+   * @param thinkingGuidance Whether thinking guidance is enabled
+   * @param customSystemPromptTemplate Custom system prompt template (empty means use built-in)
    * @return The complete system prompt with package information and planning details if enabled
    */
   fun getSystemPrompt(
@@ -420,7 +423,8 @@ object SystemPromptConfig {
           workspacePath: String? = null,
           enablePlanning: Boolean = false,
           useEnglish: Boolean = false,
-          thinkingGuidance: Boolean = false
+          thinkingGuidance: Boolean = false,
+          customSystemPromptTemplate: String = ""
   ): String {
     val importedPackages = packageManager.getImportedPackages()
     val mcpServers = packageManager.getAvailableServerPackages()
@@ -456,8 +460,12 @@ object SystemPromptConfig {
             "<tool name=\"use_package\"><param name=\"package_name\">package_name_here</param></tool>"
     )
 
-    // Select appropriate template based on language preference
-    val templateToUse = if (useEnglish) SYSTEM_PROMPT_TEMPLATE else SYSTEM_PROMPT_TEMPLATE_CN
+    // Select appropriate template based on custom template or language preference
+    val templateToUse = if (customSystemPromptTemplate.isNotEmpty()) {
+        customSystemPromptTemplate
+    } else {
+        if (useEnglish) SYSTEM_PROMPT_TEMPLATE else SYSTEM_PROMPT_TEMPLATE_CN
+    }
     val planningPromptToUse = if (useEnglish) PLANNING_MODE_PROMPT else PLANNING_MODE_PROMPT_CN
     val thinkingGuidancePromptToUse = if (useEnglish) THINKING_GUIDANCE_PROMPT else THINKING_GUIDANCE_PROMPT_CN
 
@@ -539,6 +547,8 @@ object SystemPromptConfig {
    * @param enablePlanning Whether planning mode is enabled
    * @param customIntroPrompt Custom introduction prompt text
    * @param customTonePrompt Custom tone prompt text
+   * @param thinkingGuidance Whether thinking guidance is enabled
+   * @param customSystemPromptTemplate Custom system prompt template (empty means use built-in)
    * @return The complete system prompt with custom prompts, package information and planning
    * details
    */
@@ -548,10 +558,11 @@ object SystemPromptConfig {
           enablePlanning: Boolean = false,
           customIntroPrompt: String,
           customTonePrompt: String,
-          thinkingGuidance: Boolean = false
+          thinkingGuidance: Boolean = false,
+          customSystemPromptTemplate: String = ""
   ): String {
     // Get the base system prompt
-    val basePrompt = getSystemPrompt(packageManager, workspacePath, enablePlanning, false, thinkingGuidance)
+    val basePrompt = getSystemPrompt(packageManager, workspacePath, enablePlanning, false, thinkingGuidance, customSystemPromptTemplate)
 
     // Apply custom prompts
     return applyCustomPrompts(basePrompt, customIntroPrompt, customTonePrompt)

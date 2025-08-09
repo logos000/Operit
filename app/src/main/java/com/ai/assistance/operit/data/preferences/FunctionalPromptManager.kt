@@ -87,6 +87,12 @@ class FunctionalPromptManager(private val context: Context) {
         return Pair(profile.introPrompt, profile.tonePrompt)
     }
 
+    // 获取自定义系统提示模板（通过 ApiPreferences）
+    suspend fun getCustomSystemPromptTemplate(): String {
+        val apiPreferences = com.ai.assistance.operit.data.preferences.ApiPreferences(context)
+        return apiPreferences.customSystemPromptTemplateFlow.first()
+    }
+
     // 初始化默认配置
     suspend fun initializeIfNeeded() {
         // 确保提示词配置管理器已初始化

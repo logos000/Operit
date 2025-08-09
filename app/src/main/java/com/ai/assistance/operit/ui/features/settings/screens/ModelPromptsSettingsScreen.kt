@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -20,11 +21,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.core.config.SystemPromptConfig
 import com.ai.assistance.operit.data.model.PromptProfile
 import com.ai.assistance.operit.data.preferences.ApiPreferences
 import com.ai.assistance.operit.data.preferences.PromptPreferencesManager
@@ -68,6 +71,10 @@ fun ModelPromptsSettingsScreen(
     var introPromptInput by remember { mutableStateOf(defaultIntroPrompt) }
     var tonePromptInput by remember { mutableStateOf(defaultTonePrompt) }
 
+    // 高级配置状态
+    var showAdvancedConfig by remember { mutableStateOf(false) }
+    var systemPromptTemplateInput by remember { mutableStateOf("") }
+
     // 动画状态
     val listState = rememberLazyListState()
 
@@ -98,6 +105,13 @@ fun ModelPromptsSettingsScreen(
         }
     }
 
+    // 加载自定义系统提示模板
+    LaunchedEffect(Unit) {
+        apiPreferences.customSystemPromptTemplateFlow.collect { template ->
+            systemPromptTemplateInput = template
+        }
+    }
+
     // 保存提示词函数
     fun savePrompts() {
         val profile = selectedProfile.value
@@ -109,6 +123,11 @@ fun ModelPromptsSettingsScreen(
                     introPrompt = introPromptInput,
                     tonePrompt = tonePromptInput
                 )
+                
+                // 保存自定义系统提示模板（如果在高级配置中修改了）
+                if (showAdvancedConfig) {
+                    apiPreferences.saveCustomSystemPromptTemplate(systemPromptTemplateInput)
+                }
                 
                 showSaveSuccessMessage = true
                 editMode = false
@@ -183,6 +202,19 @@ fun ModelPromptsSettingsScreen(
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
                                     Text("提示词市场", fontSize = 12.sp)
+                                }
+
+                                // 高级配置切换按钮
+                                TextButton(
+                                    onClick = { showAdvancedConfig = !showAdvancedConfig },
+                                    modifier = Modifier.height(28.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                    colors = ButtonDefaults.textButtonColors(
+                                        contentColor = if (showAdvancedConfig) MaterialTheme.colorScheme.primary 
+                                                      else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                ) {
+                                    Text("高级配置", fontSize = 12.sp)
                                 }
 
                                 // 新建按钮 - 更小的尺寸
@@ -418,6 +450,131 @@ fun ModelPromptsSettingsScreen(
                                     enabled = editMode
                                 )
 
+                                // 高级配置区域
+                                AnimatedVisibility(
+                                    visible = showAdvancedConfig,
+                                    enter = fadeIn() + expandVertically(),
+                                    exit = fadeOut() + shrinkVertically()
+                                ) {
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        Divider(
+                                            modifier = Modifier.padding(vertical = 16.dp),
+                                            color = MaterialTheme.colorScheme.outlineVariant.copy(0.3f)
+                                        )
+
+                                        Text(
+                                            text = "系统提示模板 (高级配置)",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(bottom = 4.dp)
+                                        )
+
+                                        Text(
+                                            text = "自定义整个系统提示模板。留空则使用默认模板。修改此项需要重新启动对话才能生效。",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(bottom = 8.dp)
+                                        )
+
+                                        // 查看默认模板和重置按钮
+                                        var showDefaultTemplate by remember { mutableStateOf(false) }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            TextButton(
+                                                onClick = { showDefaultTemplate = !showDefaultTemplate }
+                                            ) {
+                                                Text(if (showDefaultTemplate) "隐藏默认模板" else "查看默认模板")
+                                            }
+
+                                            if (editMode && systemPromptTemplateInput.isNotEmpty()) {
+                                                TextButton(
+                                                    onClick = {
+                                                        systemPromptTemplateInput = ""
+                                                    }
+                                                ) {
+                                                    Text("重置为默认")
+                                                }
+                                            }
+                                        }
+
+                                        // 默认模板展示区域
+                                        AnimatedVisibility(
+                                            visible = showDefaultTemplate,
+                                            enter = fadeIn() + expandVertically(),
+                                            exit = fadeOut() + shrinkVertically()
+                                        ) {
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                            ) {
+                                                Column(modifier = Modifier.padding(12.dp)) {
+                                                    Text(
+                                                        "默认模板（只读）：",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    SelectionContainer {
+                                                        Text(
+                                                            text = SystemPromptConfig.SYSTEM_PROMPT_TEMPLATE_CN,
+                                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                                fontFamily = FontFamily.Monospace
+                                                            ),
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .background(
+                                                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                                                                    RoundedCornerShape(4.dp)
+                                                                )
+                                                                .padding(8.dp)
+                                                                .heightIn(max = 200.dp)
+                                                                .verticalScroll(rememberScrollState())
+                                                        )
+                                                    }
+                                                    if (editMode) {
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.End
+                                                        ) {
+                                                            TextButton(
+                                                                onClick = {
+                                                                    systemPromptTemplateInput = SystemPromptConfig.SYSTEM_PROMPT_TEMPLATE_CN
+                                                                }
+                                                            ) {
+                                                                Text("复制到编辑框")
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        OutlinedTextField(
+                                            value = systemPromptTemplateInput,
+                                            onValueChange = {
+                                                if (editMode) {
+                                                    systemPromptTemplateInput = it
+                                                }
+                                            },
+                                            label = { Text("系统提示模板") },
+                                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp),
+                                            placeholder = { Text("留空使用默认模板...") },
+                                            minLines = 8,
+                                            maxLines = 15,
+                                            enabled = editMode,
+                                            textStyle = MaterialTheme.typography.bodySmall.copy(
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                        )
+                                    }
+                                }
+
                                 if (editMode) {
                                     Row(
                                             modifier = Modifier.fillMaxWidth(),
@@ -427,6 +584,9 @@ fun ModelPromptsSettingsScreen(
                                             onClick = {
                                                 introPromptInput = defaultIntroPrompt
                                                 tonePromptInput = defaultTonePrompt
+                                                if (showAdvancedConfig) {
+                                                    systemPromptTemplateInput = ""
+                                                }
                                             }
                                         ) { Text(stringResource(R.string.restore_default_prompts)) }
 
