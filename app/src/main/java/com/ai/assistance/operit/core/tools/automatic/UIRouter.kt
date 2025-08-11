@@ -1,0 +1,343 @@
+package com.ai.assistance.operit.core.tools.automatic
+
+import android.content.Context
+import android.util.Log
+import com.ai.assistance.operit.core.tools.AIToolHandler
+import com.ai.assistance.operit.core.tools.UIPageResultData
+import com.ai.assistance.operit.data.model.AITool
+import com.ai.assistance.operit.data.model.ToolParameter
+import com.ai.assistance.operit.util.map.*
+import org.json.JSONObject
+import kotlinx.coroutines.delay
+
+/**
+ * UI自动化路由器 - 系统的核心。
+ * 负责路径规划、参数收集和执行协调。
+ */
+class UIRouter(
+    private val context: Context,
+    private val toolHandler: AIToolHandler
+) {
+    private val operationExecutor by lazy { UIOperationExecutor(context, toolHandler) }
+    private var graph: StatefulGraph = StatefulGraph()
+    private var pathFinder: StatefulPathFinder = StatefulPathFinder(graph)
+    private var routeConfig: UIRouteConfig? = null
+
+    companion object {
+        private const val TAG = "UIRouter"
+        private const val MAX_PAGE_INFO_RETRY = 3
+        private const val PAGE_INFO_RETRY_DELAY = 500L
+    }
+
+    /**
+     * 加载路由配置来构建图。
+     * @param config UIRouteConfig的实例。
+     */
+    fun loadConfig(config: UIRouteConfig) {
+        this.routeConfig = config
+        val builder = StatefulGraphBuilder.create()
+        config.nodeDefinitions.values.forEach { builder.addNode(it.name, it.name) }
+        config.edgeDefinitions.forEach { (from, edges) ->
+            edges.forEach { edgeDef ->
+                builder.addStatefulEdge(
+                    from = from,
+                    to = edgeDef.toNodeName,
+                    action = edgeDef.operation.description,
+                    stateTransform = edgeDef.operation,
+                    conditions = edgeDef.conditions,
+                    weight = edgeDef.weight
+                )
+            }
+        }
+        graph = builder.build()
+        pathFinder = StatefulPathFinder(graph)
+    }
+
+    fun getAvailableFunctions(): List<UIFunction> {
+        return routeConfig?.functionDefinitions?.values?.toList() ?: emptyList()
+    }
+
+    /**
+     * 规划一个完整的端到端功能执行路径。
+     *
+     * @param functionName 要执行的功能的名称。
+     * @param initialParams 在规划阶段就已经明确的参数。
+     * @return 一个包含完整导航+执行路径的 [RoutePlan]，如果找不到路径则返回null。
+     */
+    suspend fun planFunction(
+        functionName: String,
+        initialParams: Map<String, Any> = emptyMap()
+    ): RoutePlan? {
+        val function = routeConfig?.functionDefinitions?.get(functionName)
+        if (function == null) {
+            Log.e(TAG, "找不到名称为 '$functionName' 的功能")
+            return null
+        }
+
+        try {
+            // 1. 获取当前UI状态作为起点
+            val startState = getCurrentUIState()
+            if (startState == null) {
+                Log.e(TAG, "无法获取当前UI状态")
+                return null
+            }
+
+            // 2. 将已知的必需参数合并到初始状态中
+            val startNodeState = startState.nodeState.withVariables(initialParams)
+
+            // 3. 搜索到达功能目标页面的导航路径
+            val navResult = pathFinder.findPath(
+                startState = startNodeState,
+                targetNodeId = function.targetNodeName,
+                runtimeContext = initialParams
+            )
+
+            if (!navResult.success || navResult.path == null) {
+                Log.w(TAG, "找不到从 ${startState.nodeId} 到功能目标页面 ${function.targetNodeName} 的路径")
+                return null
+            }
+
+            // 4. 将导航路径和功能操作合并成一个完整的路径
+            val navPath = navResult.path
+            val finalEdge = StatefulEdge(
+                from = navPath.endState.nodeId,
+                to = function.targetNodeName, // or a new 'end' node if needed
+                action = function.operation.description,
+                stateTransform = function.operation
+            )
+            val finalState = function.operation.apply(navPath.endState, initialParams)
+            if (finalState == null) {
+                Log.e(TAG, "无法应用最终的功能操作，路径规划失败")
+                return null
+            }
+            
+            val fullPath = navPath.copy(
+                states = navPath.states + finalState,
+                edges = navPath.edges + finalEdge,
+                totalWeight = navPath.totalWeight + finalEdge.weight
+            )
+
+
+            // 5. 从完整路径中分析并提取所有需要的参数
+            val allRequiredParams = analyzeParametersFromPath(fullPath)
+
+            // 6. 创建并返回执行计划
+            return RoutePlan(
+                path = fullPath,
+                requiredParameters = allRequiredParams,
+                executor = operationExecutor
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "功能规划过程中发生错误", e)
+            return null
+        }
+    }
+
+    /**
+     * 分析路径，提取所有依赖的参数。
+     */
+    private fun analyzeParametersFromPath(path: StatefulPath): List<RouteParameter<*>> {
+        val params = mutableSetOf<RouteParameter<*>>()
+        val allOperations = path.edges.map { it.stateTransform }
+
+        allOperations.forEach { transform ->
+            if (transform is UIOperation) {
+                extractParamsFromOperation(transform, params)
+            }
+        }
+        return params.toList()
+    }
+
+    /**
+     * 递归地从单个操作及其子操作中提取参数。
+     */
+    private fun extractParamsFromOperation(operation: UIOperation, params: MutableSet<RouteParameter<*>>) {
+        when (operation) {
+            is UIOperation.Input -> {
+                params.add(
+                    RouteParameter(
+                        key = operation.textVariableKey,
+                        description = "需要为 '${operation.description}' 操作提供文本内容",
+                        type = String::class.java
+                    )
+                )
+            }
+            is UIOperation.Click -> {
+                if (operation.selector is UISelector.ByText) {
+                    val templateVars = extractTemplateVariables(operation.selector.text)
+                    templateVars.forEach { varName ->
+                        params.add(
+                            RouteParameter(
+                                key = varName,
+                                description = "需要为 '${operation.description}' 操作提供目标：$varName",
+                                type = String::class.java
+                            )
+                        )
+                    }
+                }
+            }
+            is UIOperation.Sequential -> {
+                // 递归分析序列中的每个操作
+                operation.operations.forEach { subOperation ->
+                    extractParamsFromOperation(subOperation, params)
+                }
+            }
+            // 可以在这里添加更多对其他类型操作的参数分析
+            else -> {}
+        }
+    }
+
+    /**
+     * 从文本中提取模板变量，例如从 "{{target_user}}" 中提取 "target_user"
+     */
+    private fun extractTemplateVariables(text: String): List<String> {
+        val regex = Regex("\\{\\{([^}]+)\\}\\}")
+        return regex.findAll(text).map { it.groupValues[1] }.toList()
+    }
+    
+    /**
+     * 获取当前的UI状态。
+     * 使用AITool的get_page_info来获取真实的页面信息。
+     * @return 当前的UIState，如果获取失败则返回null。
+     */
+    private suspend fun getCurrentUIState(): UIState? {
+        var retryCount = 0
+        while (retryCount < MAX_PAGE_INFO_RETRY) {
+            try {
+                Log.d(TAG, "正在获取当前页面信息 (尝试 ${retryCount + 1}/$MAX_PAGE_INFO_RETRY)")
+                
+                // 调用get_page_info工具
+                val pageInfoTool = AITool(
+                    name = "get_page_info",
+                    parameters = listOf(
+                        ToolParameter("format", "json"),
+                        ToolParameter("detail", "summary")
+                    )
+                )
+                
+                val result = toolHandler.executeTool(pageInfoTool)
+                
+                if (result.success && result.result != null) {
+                    return parseUIStateFromPageInfo(result.result)
+                } else {
+                    Log.w(TAG, "获取页面信息失败: ${result.error}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "获取页面信息时发生异常 (尝试 ${retryCount + 1})", e)
+            }
+            
+            retryCount++
+            if (retryCount < MAX_PAGE_INFO_RETRY) {
+                delay(PAGE_INFO_RETRY_DELAY)
+            }
+        }
+        
+        Log.e(TAG, "多次尝试后仍无法获取页面信息，返回默认状态")
+        // 如果所有尝试都失败，返回一个默认的系统主页状态
+        return UIState(
+            nodeId = "system_home",
+            currentActivity = "Unknown",
+            packageName = "android"
+        )
+    }
+
+    /**
+     * 从页面信息结果中解析出UIState。
+     */
+    private fun parseUIStateFromPageInfo(pageInfoResult: Any): UIState? {
+        try {
+            when (pageInfoResult) {
+                is UIPageResultData -> {
+                    // 如果是结构化的UIPageResultData
+                    val packageName = pageInfoResult.packageName
+                    val activityName = pageInfoResult.activityName
+                    
+                    Log.d(TAG, "解析页面信息: packageName=$packageName, activityName=$activityName")
+                    
+                    // 根据包名和Activity名查找对应的节点ID
+                    val nodeId = findNodeIdForState(packageName, activityName) ?: "unknown_page"
+                    
+                    return UIState(
+                        nodeId = nodeId,
+                        currentActivity = activityName,
+                        packageName = packageName,
+                        uiElements = pageInfoResult.uiElements
+                    )
+                }
+                is String -> {
+                    // 如果是JSON字符串，尝试解析
+                    val jsonObject = JSONObject(pageInfoResult)
+                    val packageName = jsonObject.optString("packageName", "unknown")
+                    val activityName = jsonObject.optString("activityName", "unknown")
+                    
+                    Log.d(TAG, "从JSON解析页面信息: packageName=$packageName, activityName=$activityName")
+                    
+                    val nodeId = findNodeIdForState(packageName, activityName) ?: "unknown_page"
+                    
+                    return UIState(
+                        nodeId = nodeId,
+                        currentActivity = activityName,
+                        packageName = packageName
+                    )
+                }
+                else -> {
+                    Log.w(TAG, "未知的页面信息结果类型: ${pageInfoResult::class.java}")
+                    return null
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "解析页面信息时发生错误", e)
+            return null
+        }
+    }
+
+    /**
+     * 根据包名和Activity名查找对应的节点ID。
+     */
+    private fun findNodeIdForState(packageName: String, activityName: String?): String? {
+        val config = routeConfig ?: return null
+        
+        // 精确匹配：包名和Activity名都匹配
+        var matchedNode = config.nodeDefinitions.values.find { node ->
+            node.packageName == packageName && 
+            (node.activityName == null || node.activityName == activityName)
+        }
+        
+        // 如果精确匹配失败，尝试只匹配包名
+        if (matchedNode == null) {
+            matchedNode = config.nodeDefinitions.values.find { node ->
+                node.packageName == packageName
+            }
+        }
+        
+        Log.d(TAG, "为状态 $packageName/$activityName 找到节点: ${matchedNode?.name}")
+        return matchedNode?.name
+    }
+
+    /**
+     * 使用实际参数替换操作中的模板变量
+     */
+    fun substituteTemplateVariables(operation: UIOperation, variables: Map<String, Any>): UIOperation {
+        return when (operation) {
+            is UIOperation.Click -> {
+                when (val selector = operation.selector) {
+                    is UISelector.ByText -> {
+                        var substitutedText = selector.text
+                        variables.forEach { (key, value) ->
+                            substitutedText = substitutedText.replace("{{$key}}", value.toString())
+                        }
+                        operation.copy(selector = UISelector.ByText(substitutedText))
+                    }
+                    else -> operation
+                }
+            }
+            is UIOperation.Sequential -> {
+                val substitutedOps = operation.operations.map { 
+                    substituteTemplateVariables(it, variables) 
+                }
+                operation.copy(operations = substitutedOps)
+            }
+            else -> operation
+        }
+    }
+} 

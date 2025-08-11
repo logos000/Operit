@@ -53,7 +53,7 @@ fun ModelApiSettingsSection(
             ApiProviderType.BAIDU -> "ernie-bot-4"
             ApiProviderType.ALIYUN -> "qwen-max"
             ApiProviderType.XUNFEI -> "spark3.5"
-            ApiProviderType.ZHIPU -> "chatglm_pro"
+            ApiProviderType.ZHIPU -> "glm-4.5"
             ApiProviderType.BAICHUAN -> "baichuan4"
             ApiProviderType.MOONSHOT -> "moonshot-v1-128k"
             ApiProviderType.SILICONFLOW -> "yi-1.5-34b"
@@ -88,7 +88,7 @@ fun ModelApiSettingsSection(
                     "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
             ApiProviderType.XUNFEI -> "https://spark-api-open.xf-yun.com/v2/chat/completions"
             ApiProviderType.ZHIPU ->
-                    "https://open.bigmodel.cn/api/paas/v3/model-api/chatglm_pro/invoke"
+                    "https://open.bigmodel.cn/api/paas/v4/chat/completions"
             ApiProviderType.BAICHUAN -> "https://api.baichuan-ai.com/v1/chat/completions"
             ApiProviderType.MOONSHOT -> "https://api.moonshot.cn/v1/chat/completions"
             ApiProviderType.SILICONFLOW -> "https://api.siliconflow.cn/v1/chat/completions"
