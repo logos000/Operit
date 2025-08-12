@@ -1,5 +1,9 @@
 package com.ai.assistance.operit.core.tools.automatic
 
+import android.util.Log
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
+
 /**
  * UI功能定义。
  * 代表一个高阶的用户目标，例如“发送消息”或“发朋友圈”。
@@ -41,8 +45,8 @@ class UIRouteConfig {
      * @param fromNodeName 起始节点的名称。
      * @param toNodeName 目标节点的名称。
      */
-    fun defineEdge(fromNodeName: String, toNodeName: String, operation: UIOperation, conditions: Set<String> = emptySet(), weight: Double = 1.0) {
-        val edge = UIEdgeDefinition(toNodeName, operation, conditions, weight)
+    fun defineEdge(fromNodeName: String, toNodeName: String, operation: UIOperation, validation: UIOperation.ValidateElement? = null, conditions: Set<String> = emptySet(), weight: Double = 1.0) {
+        val edge = UIEdgeDefinition(toNodeName, operation, validation, conditions, weight)
         edgeDefinitions.computeIfAbsent(fromNodeName) { mutableListOf() }.add(edge)
     }
 
@@ -54,81 +58,161 @@ class UIRouteConfig {
     }
 
     companion object {
-        /**
-         * 加载一个预设的微信路由配置。
-         * 这是一个如何使用名称来定义应用路由的示例。
-         */
-        fun loadWeChatConfig(): UIRouteConfig {
+        private const val TAG = "UIRouteConfig"
+        private val json = Json { ignoreUnknownKeys = true; isLenient = true; prettyPrint = true }
+
+        fun loadFromJson(jsonString: String): UIRouteConfig {
+            Log.d(TAG, "Attempting to load UIRouteConfig from JSON string.")
             val config = UIRouteConfig()
+            try {
+                val jsonConfig = json.decodeFromString<JsonUIRouteConfig>(jsonString)
+                Log.d(TAG, "Successfully decoded JSON for app: ${jsonConfig.appName}")
+                Log.d(TAG, "Found ${jsonConfig.nodes.size} nodes, ${jsonConfig.edges.size} edges, ${jsonConfig.functions.size} functions in JSON.")
 
-            // 1. 定义节点 (Pages/States) - 使用 name 作为唯一标识
-            config.defineNode(UINode(
-                name = "系统桌面",
-                packageName = "com.android.launcher", // 示例包名，可能需要调整
-                nodeType = UINodeType.SYSTEM_PAGE
-            ))
 
-            config.defineNode(UINode(
-                name = "微信主页",
-                packageName = "com.tencent.mm",
-                activityName = ".ui.LauncherUI",
-                nodeType = UINodeType.APP_HOME
-            ))
+                jsonConfig.nodes.forEach { jsonNode ->
+                    config.defineNode(UINode(
+                        name = jsonNode.name,
+                        packageName = jsonConfig.packageName,
+                        activityName = jsonNode.activityName,
+                        nodeType = UINodeType.valueOf(jsonNode.nodeType)
+                    ))
+                }
 
-            config.defineNode(UINode(
-                name = "微信聊天列表",
-                packageName = "com.tencent.mm",
-                nodeType = UINodeType.LIST_PAGE
-            ))
+                jsonConfig.edges.forEach { jsonEdge ->
+                    val operation = convertJsonOperation(jsonEdge.operation)
+                    val validation = jsonEdge.validation?.let { convertJsonOperation(it) as? UIOperation.ValidateElement }
 
-            config.defineNode(UINode(
-                name = "微信聊天窗口",
-                packageName = "com.tencent.mm",
-                nodeType = UINodeType.DETAIL_PAGE
-            ))
+                    val edge = UIEdgeDefinition(
+                        toNodeName = jsonEdge.to,
+                        operation = operation,
+                        validation = validation,
+                        conditions = jsonEdge.conditions,
+                        weight = jsonEdge.weight
+                    )
+                    config.edgeDefinitions.computeIfAbsent(jsonEdge.from) { mutableListOf() }.add(edge)
+                }
 
-            // 2. 定义边 (Navigation/Actions) - 使用 name 引用节点
-            config.defineEdge("系统桌面", "微信主页",
-                UIOperation.LaunchApp("com.tencent.mm")
-            )
+                jsonConfig.functions.forEach { jsonFunction ->
+                    Log.d(TAG, "Processing function from JSON: ${jsonFunction.name}")
+                    val operation = jsonFunction.operation?.let { convertJsonOperation(it) }
+                    config.defineFunction(UIFunction(
+                        name = jsonFunction.name,
+                        description = jsonFunction.description,
+                        targetNodeName = jsonFunction.targetNodeName,
+                        operation = operation ?: UIOperation.Sequential(emptyList(), "Empty function operation")
+                    ))
+                }
 
-            config.defineEdge("微信主页", "微信聊天列表",
-                UIOperation.Click(
-                    UISelector.ByText("微信"), // 假设底部Tab的文字是"微信"
-                    description = "切换到聊天列表"
+                Log.d(TAG, "Finished loading from JSON. Final config has ${config.functionDefinitions.size} functions: ${config.functionDefinitions.keys.joinToString()}")
+                return config
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load UIRouteConfig from JSON. Error: ${e.message}", e)
+                return config // return empty config on failure
+            }
+        }
+
+        private fun convertJsonOperation(jsonOp: JsonUIOperation): UIOperation {
+            return when (jsonOp) {
+                is JsonUIOperation.Click -> UIOperation.Click(
+                    selector = convertJsonSelector(jsonOp.selector),
+                    description = jsonOp.description ?: "Click",
+                    relativeX = jsonOp.relativeX,
+                    relativeY = jsonOp.relativeY
                 )
-            )
-
-            config.defineEdge("微信聊天列表", "微信聊天窗口",
-                UIOperation.Click(
-                    // 这里使用模板，让执行器动态填充
-                    UISelector.ByText("{{target_user}}"),
-                    description = "打开与用户的聊天窗口"
+                is JsonUIOperation.Input -> UIOperation.Input(
+                    selector = convertJsonSelector(jsonOp.selector),
+                    textVariableKey = jsonOp.textVariableKey,
+                    description = jsonOp.description ?: "Input text"
                 )
-            )
-
-            // 3. 定义功能 (Functions) - 使用 name 作为唯一标识
-            config.defineFunction(UIFunction(
-                name = "发送微信消息",
-                description = "导航到指定用户的聊天窗口并发送一条消息。",
-                targetNodeName = "微信聊天窗口", // 直接引用目标页面的名字
-                operation = UIOperation.Sequential(
-                    operations = listOf(
-                        UIOperation.Input(
-                            UISelector.ByResourceId("com.tencent.mm:id/input_box"), // 假设的资源ID
-                            textVariableKey = "input_text",
-                            description = "输入消息内容"
-                        ),
-                        UIOperation.Click(
-                            UISelector.ByResourceId("com.tencent.mm:id/send_btn"), // 假设的资源ID
-                            description = "点击发送按钮"
-                        )
-                    ),
-                    description = "发送一条完整的消息"
+                is JsonUIOperation.LaunchApp -> UIOperation.LaunchApp(
+                    packageName = jsonOp.packageName,
+                    description = jsonOp.description ?: "Launch app"
                 )
-            ))
+                is JsonUIOperation.Sequential -> UIOperation.Sequential(
+                    operations = jsonOp.operations.map { convertJsonOperation(it) },
+                    description = jsonOp.description ?: "Sequential operations"
+                )
+                is JsonUIOperation.ValidateElement -> UIOperation.ValidateElement(
+                    selector = convertJsonSelector(jsonOp.selector),
+                    expectedValueKey = jsonOp.expectedValueKey,
+                    validationType = ValidationType.valueOf(jsonOp.validationType),
+                    description = jsonOp.description ?: "Validate element"
+                )
+            }
+        }
 
-            return config
+        private fun convertJsonSelector(jsonSelector: JsonUISelector): UISelector {
+            return when (jsonSelector.type) {
+                "ByText" -> UISelector.ByText(jsonSelector.value)
+                "ByResourceId" -> UISelector.ByResourceId(jsonSelector.value)
+                "ByClassName" -> UISelector.ByClassName(jsonSelector.value)
+                else -> throw IllegalArgumentException("Unknown selector type: ${jsonSelector.type}")
+            }
+        }
+        
+        fun loadPayAppExitConfig(): UIRouteConfig {
+            Log.d(TAG, "Loading PayAppExitConfig...")
+            val jsonString = """
+                {
+                  "appName": "多线程下载器",
+                  "packageName": "com.dv.adm.downloader",
+                  "nodes": [
+                    {
+                      "name": "下载器主页",
+                      "description": "应用主界面",
+                      "nodeType": "APP_HOME"
+                    },
+                    {
+                      "name": "侧边菜单",
+                      "description": "点击左上角后展开的菜单",
+                      "nodeType": "DETAIL_PAGE"
+                    },
+                    {
+                      "name": "应用外",
+                      "description": "退出应用后的状态，例如桌面",
+                      "nodeType": "SYSTEM_PAGE"
+                    }
+                  ],
+                  "edges": [
+                    {
+                      "from": "下载器主页",
+                      "to": "侧边菜单",
+                      "operation": {
+                        "type": "Click",
+                        "description": "点击左上角菜单按钮",
+                        "selector": {
+                          "type": "ByClassName",
+                          "value": "android.view.ViewGroup"
+                        },
+                        "relativeX": 0.1,
+                        "relativeY": 0.1
+                      }
+                    },
+                    {
+                      "from": "侧边菜单",
+                      "to": "应用外",
+                      "operation": {
+                        "type": "Click",
+                        "description": "点击退出按钮",
+                        "selector": {
+                          "type": "ByText",
+                          "value": "退出"
+                        }
+                      }
+                    }
+                  ],
+                  "functions": [
+                    {
+                      "name": "退出应用",
+                      "description": "从应用主页到完全退出",
+                      "targetNodeName": "应用外",
+                      "operation": null
+                    }
+                  ]
+                }
+            """.trimIndent()
+            return loadFromJson(jsonString)
         }
     }
 }
@@ -159,6 +243,7 @@ enum class UINodeType {
 data class UIEdgeDefinition(
     val toNodeName: String,
     val operation: UIOperation,
+    val validation: UIOperation.ValidateElement? = null,
     val conditions: Set<String>,
     val weight: Double
 ) 

@@ -1,6 +1,9 @@
 package com.ai.assistance.operit.core.tools.automatic
 
 import com.ai.assistance.operit.util.map.StatefulPath
+import android.util.Log
+
+private const val TAG = "RoutePlan"
 
 /**
  * UI自动化路由的执行计划。
@@ -21,7 +24,12 @@ class RoutePlan(
      * @return 如果所有必需参数都已提供，则返回true。
      */
     fun areParametersMet(providedParameters: Map<String, Any>): Boolean {
-        return requiredParameters.all { param -> providedParameters.containsKey(param.key) }
+        val met = requiredParameters.all { param -> providedParameters.containsKey(param.key) }
+        if (!met) {
+            val missing = requiredParameters.filterNot { providedParameters.containsKey(it.key) }.joinToString { it.key }
+            Log.w(TAG, "Parameter check failed. Missing parameters: $missing")
+        }
+        return met
     }
 
     /**
@@ -33,17 +41,24 @@ class RoutePlan(
      * @throws IllegalStateException 如果必需的参数未提供。
      */
     suspend fun execute(providedParameters: Map<String, Any>): RouteResult {
+        Log.d(TAG, "Executing plan with provided parameters: ${providedParameters.keys.joinToString()}")
         if (!areParametersMet(providedParameters)) {
             val missingParams = requiredParameters.filterNot { providedParameters.containsKey(it.key) }
-            throw IllegalStateException("执行失败：缺少必要的参数: ${missingParams.joinToString { it.key }}")
+            val errorMsg = "Execution failed: Missing required parameters: ${missingParams.joinToString { it.key }}"
+            Log.e(TAG, errorMsg)
+            return RouteResult.failure(errorMsg)
         }
 
         // 将提供的参数与路径中的状态进行合并，更新上下文
+        Log.d(TAG, "Merging provided parameters into the start state of the path.")
         val initialNodeState = path.startState.withVariables(providedParameters)
         val updatedPath = path.withNewStartState(initialNodeState)
 
         // 使用执行器执行更新后的路径
-        return executor.executePath(updatedPath, providedParameters)
+        Log.i(TAG, "Passing updated path to executor.")
+        val result = executor.executePath(updatedPath, providedParameters)
+        Log.i(TAG, "Executor finished. Result success: ${result.success}, Message: ${result.message}")
+        return result
     }
 
     /**

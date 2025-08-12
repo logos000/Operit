@@ -249,33 +249,40 @@ object UIHierarchyManager {
     }
 
     /**
-     * 从UI层次结构的XML中解析出窗口信息（包名和类名）。
+     * 从UI层次结构的XML中解析出窗口信息（包名）。
+     * 活动名称现在通过 getCurrentActivityName() 函数单独获取。
      * @param xmlHierarchy UI层次结构的XML字符串
-     * @return 一个Pair，第一个元素是包名，第二个是类名。
+     * @return 一个Pair，第一个元素是包名，第二个是null（活动名称需单独获取）。
      */
     fun extractWindowInfo(xmlHierarchy: String): Pair<String?, String?> {
         if (xmlHierarchy.isEmpty()) {
             return Pair(null, null)
         }
-        return try {
+        try {
             val factory = XmlPullParserFactory.newInstance()
             factory.isNamespaceAware = false
             val parser = factory.newPullParser()
             parser.setInput(StringReader(xmlHierarchy))
 
-            while (parser.eventType != XmlPullParser.END_DOCUMENT) {
-                // 我们只关心第一个 <node> 标签，它通常代表根节点/窗口
-                if (parser.eventType == XmlPullParser.START_TAG && parser.name == "node") {
-                    val packageName = parser.getAttributeValue(null, "package")
-                    val className = parser.getAttributeValue(null, "class")
-                    return Pair(packageName, className)
+            var eventType = parser.eventType
+            while (eventType != XmlPullParser.END_DOCUMENT) {
+                when (eventType) {
+                    XmlPullParser.START_TAG -> {
+                        if (parser.name == "node") {
+                            // 只获取根节点的包名，活动名称通过单独的函数获取
+                            val rootPackage = parser.getAttributeValue(null, "package")
+                            return Pair(rootPackage, null)
+                        }
+                    }
                 }
-                parser.next()
+                eventType = parser.next()
             }
-            Pair(null, null)
+            
+            return Pair(null, null)
+
         } catch (e: Exception) {
             Log.e(TAG, "解析窗口信息时出错", e)
-            Pair(null, null)
+            return Pair(null, null)
         }
     }
 
@@ -372,6 +379,22 @@ object UIHierarchyManager {
         } catch (e: RemoteException) {
             Log.e(TAG, "检查无障碍服务状态失败", e)
             false
+        }
+    }
+
+    /**
+     * 从远程服务获取当前Activity名称。
+     */
+    suspend fun getCurrentActivityName(context: Context): String? {
+        if (!ensureBound(context)) {
+            Log.w(TAG, "绑定失败，无法获取Activity名称")
+            return null
+        }
+        return try {
+            accessibilityProvider?.currentActivityName
+        } catch (e: RemoteException) {
+            Log.e(TAG, "从提供者获取Activity名称失败", e)
+            null
         }
     }
 }

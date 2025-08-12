@@ -12,8 +12,8 @@
 ### 核心组件
 
 #### 标准图组件
-- `Node.kt` - 图节点定义
-- `Edge.kt` - 图边定义
+- `Node.kt` - 图节点定义。每个节点可以包含`metadata`（任意键值对）和`properties`（字符串标签）。
+- `Edge.kt` - 图边定义。除了`weight`，每条边还可以包含`conditions`（通过条件）、`parameters`（用于执行动作的参数）和`metadata`。
 - `Graph.kt` - 图数据结构
 - `GraphBuilder.kt` - 图构建器和搜索器
 - `Path.kt` - 路径表示和结果
@@ -51,9 +51,12 @@
 **核心接口**:
 - `from: String`, `to: String`: 边的起始和目标节点。
 - `action: String`: 描述这个动作（例如：“开门”、“拾取物品”）。
-- `conditions: Set<String>`: 通过这条边需要的**外部条件**。例如，门需要钥匙，这个条件可以由玩家的`NodeState`中的`has_key`变量来满足。
+- `conditions: Set<String>`: 通过这条边需要的**前置条件**。这些条件可以通过两种方式满足：
+    1.  在路径搜索时，由外部提供的`availableConditions`集合满足。
+    2.  **动态满足**：如果一个`NodeState`的`variables`中包含一个与条件同名的布尔型变量且其值为`true`，该条件也会被视为满足。例如，`condition="has_key"`可以被`NodeState`中的`"has_key": true`满足。
 - `stateTransform: StateTransform`: 当通过这条边时，应用到`NodeState`上的状态转换规则。
-- `applyTransform(fromState, availableConditions)`: 尝试应用转换，如果满足所有条件，则返回一个新的、位于`to`节点的`NodeState`。
+- `parameters: Map<String, Any>`: 存储与该动作相关的参数。
+- `applyTransform(fromState, availableConditions, context)`: 尝试应用转换，如果满足所有条件，则返回一个新的、位于`to`节点的`NodeState`。`context`参数可以提供运行时数据。
 
 ##### `StatefulGraph.kt` & `StatefulGraphBuilder.kt` - 图的构建与存储
 
@@ -76,6 +79,7 @@
   - `targetNodeId: String`: 最终路径必须到达的**节点ID**。
   - `targetStatePredicate: ((NodeState) -> Boolean)?`: 一个可选的附加条件，最终状态必须满足这个断言。例如，`{ it.getVariable<Boolean>("任务完成") == true }`。
   - `availableConditions: Set<String>`: 在搜索开始时提供的外部条件。
+  - `runtimeContext: Map<String, Any>`: **运行时上下文**，用于在状态转换中注入外部数据，尤其适用于模板化转换。
   - `enableBacktrack: Boolean`: 是否启用回退搜索。对于复杂的状态依赖（如先拿A才能做B，但B失败了需要放弃A），回退是必需的。
 
 ##### `StatefulPath.kt` & `StatefulPathResult.kt` - 路径和结果
@@ -86,7 +90,8 @@
 - `states: List<NodeState>`: 路径上每一个步骤的状态快照列表。
 - `edges: List<StatefulEdge>`: 路径上按顺序执行的边的列表。
 - `startState: NodeState`, `endState: NodeState`: 路径的起始和最终状态。
-- `isValid()`: 验证路径中的每一步状态转换是否都合法。
+- `isValid(context)`: 验证路径中的每一步状态转换是否都合法，可以提供`context`用于模板化转换的验证。
+- `hasStateConflicts()`: 检查路径中是否存在同一节点有不兼容状态的情况。
 
 ## 🚀 快速开始
 
@@ -199,6 +204,44 @@ val calculator = StatefulGraphBuilder.create()
 val startState = NodeState("输入", mapOf("a" to 10, "b" to 20))
 val result = calculator.findPath(startState, "处理")
 // 结果状态将包含 sum = 30
+```
+
+#### 4. 动态条件与运行时上下文
+
+此示例展示了如何利用 `NodeState` 中的布尔变量动态满足边的条件，并通过 `runtimeContext` 在状态转换中渲染模板字符串。
+
+```kotlin
+val dungeon = StatefulGraphBuilder.create()
+    .addNode("入口")
+    .addNode("大厅")
+    .addNode("密室")
+
+    // 动作：在大厅找到钥匙，将 "has_key" 状态设为 true
+    .addSetVariableEdge("入口", "大厅", "找到钥匙", "has_key", true)
+
+    // 动作：打开密室的门，需要 "has_key" 条件
+    // 该条件可由 NodeState 中的 "has_key": true 动态满足
+    .addStatefulEdge("大厅", "密室", "打开密室门",
+        stateTransform = StateTransforms.set("greeting", "你好, {{character_name}}!"),
+        conditions = setOf("has_key")
+    )
+    .buildWithFinder()
+
+// 初始状态在“入口”
+val startState = NodeState("入口")
+
+// 搜索路径，并提供运行时上下文
+val result = dungeon.findPath(
+    startState,
+    "密室",
+    runtimeContext = mapOf("character_name" to "英雄")
+)
+
+if (result.success) {
+    val finalState = result.path!!.endState
+    println("最终状态: ${finalState.variables}")
+    // 预期输出：最终状态: {has_key=true, greeting=你好, 英雄!}
+}
 ```
 
 ## 🎮 实际应用场景
@@ -323,7 +366,46 @@ val result = pathFinder.findPathWithHeuristic(
 )
 ```
 
-### 2. 多路径搜索
+### 2. 路径验证
+
+搜索返回的`StatefulPath`可以进行验证，以确保其完整性和正确性。
+
+```kotlin
+val result = finder.findPath(start, target)
+if (result.success) {
+    val path = result.path!!
+    
+    // 验证路径中的每一步状态转换是否都正确应用
+    // 如果转换中使用了模板，需要提供相同的 context
+    val isValid = path.isValid(runtimeContext)
+    println("路径是否有效: $isValid")
+    
+    // 检查路径中是否存在状态冲突（例如，在同一节点上出现了不兼容的状态）
+    val hasConflicts = path.hasStateConflicts()
+    println("路径是否存在状态冲突: $hasConflicts")
+}
+```
+
+### 3. 模板化状态转换
+
+`StateTransform`支持使用 `{{key}}` 格式的模板字符串，这些模板可以在路径搜索时通过 `runtimeContext` 动态填充。
+
+```kotlin
+// 转换规则：设置一个问候语，其中包含一个模板变量
+val transform = StateTransforms.set("message", "来自{{city}}的问候")
+
+// 搜索时提供上下文
+val context = mapOf("city" to "艾泽拉斯")
+val result = finder.findPath(
+    startState,
+    "targetNode",
+    runtimeContext = context
+)
+
+// 最终状态的 message 变量将被渲染为 "来自艾泽拉斯的问候"
+```
+
+### 4. 多路径搜索
 
 ```kotlin
 val allPaths = pathFinder.findAllPaths(
@@ -338,7 +420,7 @@ allPaths.forEach { path ->
 }
 ```
 
-### 3. 状态回退搜索
+### 5. 状态回退搜索
 
 ```kotlin
 // 启用回退功能，处理状态冲突
@@ -429,11 +511,13 @@ class CustomPathFinder(graph: StatefulGraph) {
 ## 🎯 最佳实践
 
 1. **状态设计** - 保持状态简单和不可变
-2. **条件使用** - 合理使用边条件避免无效路径
+2. **条件使用** - 合理使用边条件避免无效路径。利用`NodeState`的布尔变量作为动态条件。
 3. **权重设置** - 根据实际成本设置边权重
 4. **深度限制** - 设置合理的搜索深度避免无限循环
 5. **状态键** - 确保状态键能正确区分不同状态
 6. **回退策略** - 在复杂状态空间中启用回退搜索
+7. **上下文注入** - 使用`runtimeContext`将外部数据安全地注入状态转换逻辑，而不是将它们硬编码在图中。
+8. **路径验证** - 在获得路径后，使用`isValid()`和`hasStateConflicts()`进行健全性检查，尤其是在复杂的图中。
 
 ## 🔍 调试技巧
 

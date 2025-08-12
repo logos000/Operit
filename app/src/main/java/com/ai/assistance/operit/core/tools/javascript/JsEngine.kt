@@ -107,8 +107,17 @@ class JsEngine(private val context: Context) {
                     webView =
                             WebView(context).apply {
                                 settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
+                                settings.domStorageEnabled = true // 允许访问 sessionStorage 和 localStorage
+
+                                // 为了安全，禁用文件系统访问，除非显式通过工具提供
+                                settings.allowFileAccess = false
+                                settings.allowContentAccess = false
+
+                                // 设置User Agent
+                                settings.userAgentString = "Operit-JsEngine/1.0"
                                 addJavascriptInterface(toolCallInterface, "NativeInterface")
+                                // 加载一个带有有效基地址的空HTML页面，以解决 about:blank 的源安全问题
+                                loadDataWithBaseURL("https://localhost", "<html></html>", "text/html", "UTF-8", null)
                             }
                     latch.countDown()
                 } catch (e: Exception) {
@@ -731,16 +740,20 @@ class JsEngine(private val context: Context) {
                 
                 // 从模块环境中获取结果
                 const module = moduleResult.module;
-                const exports = moduleResult.exports;
+                const moduleResultExports = moduleResult.exports;
+
+                console.log("moduleResultExports: " + Object.entries(moduleResultExports)
+                .map(([key, value]) => key+": "+value+"("+typeof value+")")
+                .join("\n") + "\n");
                 
                 // 确保指定的函数存在 - 先查找exports，再查找module.exports，最后查找全局
                 let functionResult = null;
                 let functionFound = false;
                 
-                if (typeof exports['${functionName}'] === 'function') {
+                if (typeof moduleResultExports['${functionName}'] === 'function') {
                     // 如果函数是作为exports导出的
                     functionFound = true;
-                    functionResult = exports['${functionName}'](params);
+                    functionResult = moduleResultExports['${functionName}'](params);
                 } else if (typeof module.exports['${functionName}'] === 'function') {
                     // 尝试替代的导出模式
                     functionFound = true;
@@ -762,18 +775,13 @@ class JsEngine(private val context: Context) {
                 } else {
                     // 如果没有找到函数，记录所有可用的函数
                     var availableFunctions = [];
-                    for (var key in exports) {
-                        if (typeof exports[key] === 'function') {
+                    for (var key in moduleResultExports) {
+                        if (typeof moduleResultExports[key] === 'function') {
                             availableFunctions.push(key);
                         }
                     }
                     for (var key in module.exports) {
                         if (typeof module.exports[key] === 'function' && !availableFunctions.includes(key)) {
-                            availableFunctions.push(key);
-                        }
-                    }
-                    for (var key in window) {
-                        if (typeof window[key] === 'function' && !key.startsWith('_') && !availableFunctions.includes(key)) {
                             availableFunctions.push(key);
                         }
                     }
@@ -790,7 +798,7 @@ class JsEngine(private val context: Context) {
         // 在主线程中执行脚本
         ContextCompat.getMainExecutor(context).execute {
             webView?.evaluateJavascript(executionScript) { result ->
-                Log.d(TAG, "Script function execution completed with: $result")
+                Log.d(TAG, "Script execution dispatched. Sync result: $result (final async result is handled separately)")
             }
         }
 
@@ -1429,7 +1437,7 @@ class JsEngine(private val context: Context) {
                 // 加入更详细的日志，帮助排查异步问题
                 Log.d(
                         TAG,
-                        "Setting result from JavaScript: length=${result.length}, callback=${resultCallback != null}, isDone=${resultCallback?.isDone}"
+                        "Setting result from JavaScript: result=${result.take(500)}, length=${result.length}, callback=${resultCallback != null}, isDone=${resultCallback?.isDone}"
                 )
 
                 // 确保回调仍然有效

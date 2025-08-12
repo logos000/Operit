@@ -54,4 +54,10 @@
      * @return 如果服务已启用则返回true，否则返回false。
      */
     boolean isAccessibilityServiceEnabled();
+
+    /**
+     * 获取当前前台Activity的名称。
+     * @return 当前Activity的类名，如果无法获取则返回null。
+     */
+    String getCurrentActivityName();
     }

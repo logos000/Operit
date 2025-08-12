@@ -15,7 +15,7 @@
 ```mermaid
 graph TD
     subgraph "定义阶段: 编写菜谱"
-        A[UIRouteConfig] -->|定义地点、路径和功能| B((菜谱: App能力地图))
+        A[UIRouteConfig] -->|定义地点、路径(含验证)和功能| B((菜谱: App能力地图))
     end
 
     subgraph "规划阶段: 大厨规划"
@@ -23,7 +23,7 @@ graph TD
         D -->|1. 查看菜谱| B
         D -->|2. 我现在在哪?| E(AIToolHandler: 感知环境)
         E -->|3. 返回当前UI状态| D
-        D -->|4. 规划从'现在'到'聊天页'的路径<br/>+ 附加'输入/发送'操作| F(StatefulGraph: 导航)
+        D -->|4. 规划从'现在'到'聊天页'的路径(包含验证步骤)<br/>+ 附加'输入/发送'操作| F(StatefulGraph: 导航)
         D -->|5. 生成完整计划<br/>并告知需要'聊天对象'和'内容'| G[RoutePlan: 执行计划]
     end
     
@@ -32,7 +32,7 @@ graph TD
         G -->|7. 开始执行| H(UIOperationExecutor: 执行者)
         H -->|8. 操作UI (点击,输入)| E
         E -->|9. 返回结果/新状态| H
-        H -->|10. 验证是否符合预期?| E
+        H -->|10. 验证是否符合预期? (例如:页面标题是否正确)| E
         H -->|11. 重复直到任务完成| H
     end
 
@@ -44,7 +44,7 @@ graph TD
 
 1.  **编写“菜谱” (`UIRouteConfig`)**: 首先，我们需要告诉系统一个App能做什么。我们通过 `UIRouteConfig` 来定义：
     *   **地点 (`UINode`)**: App里的各个页面，我们用它独一无二的 `name` 来标识，如“微信主页”、“聊天列表”。
-    *   **路径 (`UIEdge`)**: 页面之间的跳转操作，我们用页面的 `name` 来连接起点和终点，比如从“微信主页”可以到达“聊天列表”。这里的操作，例如点击，输入等，都是由 `UIOperation` 定义的，它本身也是一种 `StateTransform`。
+    *   **路径 (`UIEdge`)**: 页面之间的跳转操作。特别地，我们可以在这里定义一个**验证步骤**。例如，从“聊天列表”点击“张三”后，我们可以附加一个验证操作，确保新页面的标题确实是“张三”，从而保证我们进入了正确的聊天窗口。
     *   **功能 (`UIFunction`)**: 一个完整的、有业务价值的任务。比如“发送微信消息”这个功能，它也用自己的 `name` 作为标识，并定义了**目标地点**是“聊天窗口”，以及**后续操作**是“输入文本”和“点击发送”。
 
 2.  **大厨“规划” (`UIRouter`)**: 当您下达一个“发送微信消息”的指令时，`UIRouter` 作为大厨开始工作：
@@ -88,6 +88,12 @@ val wechatConfig = UIRouteConfig.build {
     edge("chat_list", "chat_window") {
         // 使用模板变量，执行时会被替换
         operation = UIOperations.click(UISelector.ByText("{{target_user}}"))
+        // 【新功能】在点击后，验证新页面的标题是否与目标用户匹配
+        validation = UIOperations.validate(
+            selector = UISelector.ByResourceId("com.tencent.mm:id/title"), // 假设的标题ID
+            expectedValueKey = "target_user",
+            validationType = ValidationType.TEXT_EQUALS
+        )
     }
 
     // 定义核心功能

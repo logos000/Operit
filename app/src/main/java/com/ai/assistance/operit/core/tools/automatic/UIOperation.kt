@@ -20,7 +20,11 @@ sealed interface UIOperation : StateTransform {
     // 基础UI操作
     data class Click(
         val selector: UISelector,
-        override val description: String = "点击元素"
+        override val description: String,
+        /** Position relative to the element's width (0.0 to 1.0 from left to right) */
+        val relativeX: Float? = null,
+        /** Position relative to the element's height (0.0 to 1.0 from top to bottom) */
+        val relativeY: Float? = null
     ) : UIOperation
 
     data class Input(
@@ -72,6 +76,22 @@ sealed interface UIOperation : StateTransform {
     object NoOp : UIOperation {
         override val description: String = "无操作"
     }
+
+    data class ValidateElement(
+        val selector: UISelector,
+        val expectedValueKey: String,
+        val validationType: ValidationType = ValidationType.TEXT_EQUALS,
+        override val description: String = "验证元素"
+    ) : UIOperation
+}
+
+/**
+ * 定义验证操作的类型。
+ */
+enum class ValidationType {
+    TEXT_EQUALS,
+    TEXT_CONTAINS,
+    EXISTS
 }
 
 /**
@@ -88,7 +108,10 @@ sealed class UISelector {
     companion object {
         fun byResourceId(id: String) = ByResourceId(id)
         fun byText(text: String) = ByText(text)
-        // ... 其他工厂方法
+        fun byContentDesc(desc: String) = ByContentDesc(desc)
+        fun byClassName(name: String) = ByClassName(name)
+        fun byBounds(bounds: String) = ByBounds(bounds)
+        fun byXPath(xpath: String) = ByXPath(xpath)
     }
 }
 

@@ -29,6 +29,7 @@ import com.ai.assistance.operit.ui.features.settings.screens.UserPreferencesSett
 import com.ai.assistance.operit.ui.features.settings.screens.CustomHeadersSettingsScreen
 import com.ai.assistance.operit.ui.features.token.TokenConfigWebViewScreen
 import com.ai.assistance.operit.ui.features.toolbox.screens.AppPermissionsToolScreen
+import com.ai.assistance.operit.ui.features.toolbox.screens.AutomationToolScreen
 import com.ai.assistance.operit.ui.features.toolbox.screens.FileManagerToolScreen
 import com.ai.assistance.operit.ui.features.toolbox.screens.FormatConverterToolScreen
 import com.ai.assistance.operit.ui.features.toolbox.screens.LogcatToolScreen
@@ -165,6 +166,7 @@ sealed class Screen(
                     onTextToSpeechSelected = { navigateTo(TextToSpeech) },
                     onSpeechToTextSelected = { navigateTo(SpeechToText) },
                     onToolTesterSelected = { navigateTo(ToolTester) },
+                    onAutomationToolSelected = { navigateTo(AutomationTool) },
                     onAgreementSelected = { navigateTo(Agreement) }
             )
         }
@@ -799,6 +801,24 @@ sealed class Screen(
                 onGestureConsumed: (Boolean) -> Unit
         ) {
             SpeechToTextToolScreen(navController = navController)
+        }
+    }
+
+    // 添加自动化工具屏幕
+    data object AutomationTool :
+            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = "自动化工具") {
+        @Composable
+        override fun Content(
+                navController: NavController,
+                navigateTo: ScreenNavigationHandler,
+                updateNavItem: NavItemChangeHandler,
+                onGoBack: () -> Unit,
+                hasBackgroundImage: Boolean,
+                onLoading: (Boolean) -> Unit,
+                onError: (String) -> Unit,
+                onGestureConsumed: (Boolean) -> Unit
+        ) {
+            AutomationToolScreen(navController = navController)
         }
     }
 

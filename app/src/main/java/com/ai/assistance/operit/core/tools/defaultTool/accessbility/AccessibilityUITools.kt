@@ -138,7 +138,7 @@ open class AccessibilityUITools(context: Context) : StandardUITools(context) {
             val (packageName, className) = UIHierarchyManager.extractWindowInfo(hierarchyXml)
 
             focusInfo.packageName = packageName
-            focusInfo.activityName = className?.substringAfterLast('.')
+            focusInfo.activityName = className // 使用完整的类名
 
             // 如果没有获取到，使用默认值
             if (focusInfo.packageName == null) focusInfo.packageName = "android"
