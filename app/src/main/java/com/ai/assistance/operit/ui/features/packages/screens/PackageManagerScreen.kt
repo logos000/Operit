@@ -3,11 +3,18 @@ package com.ai.assistance.operit.ui.features.packages.screens
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
@@ -16,16 +23,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.core.tools.PackageTool
 import com.ai.assistance.operit.core.tools.ToolPackage
+import com.ai.assistance.operit.core.tools.automatic.UIFunction
+import com.ai.assistance.operit.core.tools.automatic.UIRouter
+import com.ai.assistance.operit.core.tools.automatic.config.AutomationPackageInfo
+import com.ai.assistance.operit.core.tools.automatic.config.AutomationPackageManager
 import com.ai.assistance.operit.core.tools.packTool.PackageManager
 import com.ai.assistance.operit.data.mcp.MCPRepository
 import com.ai.assistance.operit.data.model.ToolResult
 import com.ai.assistance.operit.ui.features.packages.components.EmptyState
 import com.ai.assistance.operit.ui.features.packages.components.PackageTab
+import com.ai.assistance.operit.ui.features.packages.components.MCPSubTab
+import com.ai.assistance.operit.ui.features.packages.dialogs.AutomationFunctionExecutionDialog
+import com.ai.assistance.operit.ui.features.packages.dialogs.AutomationPackageDetailsDialog
 import com.ai.assistance.operit.ui.features.packages.dialogs.PackageDetailsDialog
 import com.ai.assistance.operit.ui.features.packages.dialogs.ScriptExecutionDialog
 import com.ai.assistance.operit.ui.features.packages.lists.PackagesList
@@ -39,6 +54,7 @@ fun PackageManagerScreen() {
     val packageManager = remember {
         PackageManager.getInstance(context, AIToolHandler.getInstance(context))
     }
+    val automationManager = remember { AutomationPackageManager.getInstance(context) }
     val scope = rememberCoroutineScope()
     val mcpRepository = remember { MCPRepository(context) }
 
@@ -47,6 +63,9 @@ fun PackageManagerScreen() {
     val importedPackages = remember { mutableStateOf<List<String>>(emptyList()) }
     // UI展示用的导入状态列表，与后端状态分离
     val visibleImportedPackages = remember { mutableStateOf<List<String>>(emptyList()) }
+
+    // State for automation configs
+    val automationConfigs = remember { mutableStateOf<List<AutomationPackageInfo>>(emptyList()) }
 
     // State for selected package and showing details
     var selectedPackage by remember { mutableStateOf<String?>(null) }
@@ -57,11 +76,18 @@ fun PackageManagerScreen() {
     var selectedTool by remember { mutableStateOf<PackageTool?>(null) }
     var scriptExecutionResult by remember { mutableStateOf<ToolResult?>(null) }
 
+    // State for automation dialogs
+    var selectedAutomationPackage by remember { mutableStateOf<AutomationPackageInfo?>(null) }
+    var showAutomationDetails by remember { mutableStateOf(false) }
+    var selectedAutomationFunction by remember { mutableStateOf<UIFunction?>(null) }
+    var showAutomationExecution by remember { mutableStateOf(false) }
+
     // State for snackbar
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Tab selection state
     var selectedTab by remember { mutableStateOf(PackageTab.PACKAGES) }
+    var selectedMCPSubTab by remember { mutableStateOf(MCPSubTab.MARKETPLACE) }
 
     // File picker launcher for importing external packages
     val packageFilePicker =
@@ -83,39 +109,81 @@ fun PackageManagerScreen() {
                                 return@launch
                             }
 
-                            if (!fileName!!.endsWith(".js")) {
-                                snackbarHostState.showSnackbar(message = "只支持.js文件")
-                                return@launch
+                            // 根据当前选中的标签页处理不同类型的文件
+                            when (selectedTab) {
+                                PackageTab.PACKAGES -> {
+                                    if (!fileName!!.endsWith(".js")) {
+                                        snackbarHostState.showSnackbar(message = "包管理只支持.js文件")
+                                        return@launch
+                                    }
+
+                                    // Copy the file to a temporary location
+                                    val inputStream = context.contentResolver.openInputStream(uri)
+                                    val tempFile = File(context.cacheDir, fileName)
+
+                                    inputStream?.use { input ->
+                                        tempFile.outputStream().use { output -> input.copyTo(output) }
+                                    }
+
+                                    // Import the package from the temporary file
+                                    packageManager.importPackageFromExternalStorage(
+                                            tempFile.absolutePath
+                                    )
+
+                                    // Refresh the lists
+                                    availablePackages.value = packageManager.getAvailablePackages()
+                                    importedPackages.value = packageManager.getImportedPackages()
+
+                                    snackbarHostState.showSnackbar(message = "外部包导入成功")
+
+                                    // Clean up the temporary file
+                                    tempFile.delete()
+                                }
+                                PackageTab.AUTOMATION_CONFIGS -> {
+                                    if (!fileName!!.endsWith(".json")) {
+                                        snackbarHostState.showSnackbar(message = "自动化配置只支持.json文件")
+                                        return@launch
+                                    }
+
+                                    // Copy the file to a temporary location
+                                    val inputStream = context.contentResolver.openInputStream(uri)
+                                    val tempFile = File(context.cacheDir, fileName)
+
+                                    inputStream?.use { input ->
+                                        tempFile.outputStream().use { output -> input.copyTo(output) }
+                                    }
+
+                                    // Import the automation config
+                                    val result = automationManager.importPackage(tempFile.absolutePath)
+                                    
+                                    if (result.startsWith("Successfully")) {
+                                        // Refresh the automation configs list
+                                        automationConfigs.value = automationManager.getAllPackageInfo()
+                                        snackbarHostState.showSnackbar(message = "自动化配置导入成功")
+                                    } else {
+                                        snackbarHostState.showSnackbar(message = result)
+                                    }
+
+                                    // Clean up the temporary file
+                                    tempFile.delete()
+                                }
+                                else -> {
+                                    snackbarHostState.showSnackbar("当前标签页不支持导入")
+                                }
                             }
-
-                            // Copy the file to a temporary location
-                            val inputStream = context.contentResolver.openInputStream(uri)
-                            val tempFile = File(context.cacheDir, fileName)
-
-                            inputStream?.use { input ->
-                                tempFile.outputStream().use { output -> input.copyTo(output) }
-                            }
-
-                            // Import the package from the temporary file
-                            packageManager.importPackageFromExternalStorage(
-                                    tempFile.absolutePath
-                            )
-
-                            // Refresh the lists
-                            availablePackages.value = packageManager.getAvailablePackages()
-                            importedPackages.value = packageManager.getImportedPackages()
-
-                            snackbarHostState.showSnackbar(message = "外部包导入成功")
-
-                            // Clean up the temporary file
-                            tempFile.delete()
                         } catch (e: Exception) {
-                            Log.e("PackageManagerScreen", "Failed to import external package", e)
-                            snackbarHostState.showSnackbar(message = "外部包导入失败: ${e.message}")
+                            Log.e("PackageManagerScreen", "Failed to import file", e)
+                            snackbarHostState.showSnackbar(message = "导入失败: ${e.message}")
                         }
                     }
                 }
             }
+
+    // Initialize UIRouter for automation execution
+    val uiRouter = remember {
+        val toolHandler = AIToolHandler.getInstance(context)
+        UIRouter(context, toolHandler)
+    }
 
     // Load packages
     LaunchedEffect(Unit) {
@@ -124,8 +192,10 @@ fun PackageManagerScreen() {
             importedPackages.value = packageManager.getImportedPackages()
             // 初始化UI显示状态
             visibleImportedPackages.value = importedPackages.value.toList()
+
+            automationConfigs.value = automationManager.getAllPackageInfo()
         } catch (e: Exception) {
-            Log.e("PackageManagerScreen", "Failed to load packages", e)
+            Log.e("PackageManagerScreen", "Failed to load packages or configs", e)
         }
     }
 
@@ -141,9 +211,7 @@ fun PackageManagerScreen() {
                 }
             },
             floatingActionButton = {
-                if (selectedTab != PackageTab.MCP_MARKETPLACE &&
-                                selectedTab != PackageTab.MCP_CONFIG
-                ) {
+                if (selectedTab == PackageTab.PACKAGES || selectedTab == PackageTab.AUTOMATION_CONFIGS) {
                     FloatingActionButton(
                             onClick = { packageFilePicker.launch("*/*") },
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -153,7 +221,16 @@ fun PackageManagerScreen() {
                                             elevation = 6.dp,
                                             shape = FloatingActionButtonDefaults.shape
                                     )
-                    ) { Icon(imageVector = Icons.Rounded.Add, contentDescription = "导入外部包") }
+                    ) { 
+                        Icon(
+                            imageVector = Icons.Rounded.Add, 
+                            contentDescription = when (selectedTab) {
+                                PackageTab.PACKAGES -> "导入外部包"
+                                PackageTab.AUTOMATION_CONFIGS -> "导入自动化配置"
+                                else -> "导入"
+                            }
+                        ) 
+                    }
                 }
             }
     ) { paddingValues ->
@@ -179,7 +256,7 @@ fun PackageManagerScreen() {
                                             Modifier.tabIndicatorOffset(
                                                     tabPositions[selectedTab.ordinal]
                                             ),
-                                    height = 3.dp,
+                                    height = 2.dp,
                                     color = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -189,88 +266,98 @@ fun PackageManagerScreen() {
                 Tab(
                         selected = selectedTab == PackageTab.PACKAGES,
                         onClick = { selectedTab = PackageTab.PACKAGES },
-                        modifier = Modifier.height(48.dp),
-                        text = {
-                            Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                        imageVector = Icons.Default.Extension,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                        "包管理",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        },
-                        selectedContentColor = MaterialTheme.colorScheme.primary,
-                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                        modifier = Modifier.height(48.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Extension,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = if (selectedTab == PackageTab.PACKAGES) 
+                                MaterialTheme.colorScheme.primary 
+                            else 
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "包管理",
+                            style = MaterialTheme.typography.bodySmall,
+                            softWrap = false,
+                            color = if (selectedTab == PackageTab.PACKAGES) 
+                                MaterialTheme.colorScheme.primary 
+                            else 
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
 
-                // MCP插件市场标签
+                // 自动化配置标签
                 Tab(
-                        selected = selectedTab == PackageTab.MCP_MARKETPLACE,
-                        onClick = { selectedTab = PackageTab.MCP_MARKETPLACE },
-                        modifier = Modifier.height(48.dp),
-                        text = {
-                            Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                        imageVector = Icons.Default.Cloud,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                        "插件市场",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        },
-                        selectedContentColor = MaterialTheme.colorScheme.primary,
-                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    selected = selectedTab == PackageTab.AUTOMATION_CONFIGS,
+                    onClick = { selectedTab = PackageTab.AUTOMATION_CONFIGS },
+                    modifier = Modifier.height(48.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Build,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = if (selectedTab == PackageTab.AUTOMATION_CONFIGS) 
+                                MaterialTheme.colorScheme.primary 
+                            else 
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "自动化配置",
+                            style = MaterialTheme.typography.bodySmall,
+                            softWrap = false,
+                            color = if (selectedTab == PackageTab.AUTOMATION_CONFIGS) 
+                                MaterialTheme.colorScheme.primary 
+                            else 
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
 
-                // MCP配置标签
+                // MCP标签
                 Tab(
-                        selected = selectedTab == PackageTab.MCP_CONFIG,
-                        onClick = { selectedTab = PackageTab.MCP_CONFIG },
-                        modifier = Modifier.height(48.dp),
-                        text = {
-                            Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                        "MCP配置",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        },
-                        selectedContentColor = MaterialTheme.colorScheme.primary,
-                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                        selected = selectedTab == PackageTab.MCP,
+                        onClick = { selectedTab = PackageTab.MCP },
+                        modifier = Modifier.height(48.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Cloud,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = if (selectedTab == PackageTab.MCP) 
+                                MaterialTheme.colorScheme.primary 
+                            else 
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "MCP",
+                            style = MaterialTheme.typography.bodySmall,
+                            softWrap = false,
+                            color = if (selectedTab == PackageTab.MCP) 
+                                MaterialTheme.colorScheme.primary 
+                            else 
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
 
             // 内容区域添加水平padding
             Box(modifier = Modifier
@@ -341,13 +428,95 @@ fun PackageManagerScreen() {
                             }
                         }
                     }
-                    PackageTab.MCP_MARKETPLACE -> {
-                        // MCP插件市场界面
-                        MCPScreen(mcpRepository = mcpRepository)
+                    PackageTab.AUTOMATION_CONFIGS -> {
+                        if (automationConfigs.value.isEmpty()) {
+                            EmptyState(message = "没有可用的自动化配置")
+                        } else {
+                            AutomationConfigList(
+                                configs = automationConfigs.value,
+                                onConfigClick = { config ->
+                                    selectedAutomationPackage = config
+                                    showAutomationDetails = true
+                                }
+                            )
+                        }
                     }
-                    PackageTab.MCP_CONFIG -> {
-                        // MCP配置界面
-                        MCPConfigScreen()
+                    PackageTab.MCP -> {
+                        // MCP界面，包含二级标签页
+                        Column {
+                            // MCP子标签页
+                            TabRow(
+                                selectedTabIndex = selectedMCPSubTab.ordinal,
+                                modifier = Modifier.fillMaxWidth(),
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                indicator = { tabPositions ->
+                                    Box(
+                                        modifier = Modifier
+                                            .tabIndicatorOffset(tabPositions[selectedMCPSubTab.ordinal])
+                                            .height(2.dp)
+                                            .background(MaterialTheme.colorScheme.primary)
+                                    )
+                                }
+                            ) {
+                                Tab(
+                                    selected = selectedMCPSubTab == MCPSubTab.MARKETPLACE,
+                                    onClick = { selectedMCPSubTab = MCPSubTab.MARKETPLACE },
+                                    modifier = Modifier.height(44.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Cloud,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            "插件市场",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            softWrap = false
+                                        )
+                                    }
+                                }
+                                Tab(
+                                    selected = selectedMCPSubTab == MCPSubTab.CONFIG,
+                                    onClick = { selectedMCPSubTab = MCPSubTab.CONFIG },
+                                    modifier = Modifier.height(44.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Settings,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            "配置",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            softWrap = false
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            // MCP子内容
+                            when (selectedMCPSubTab) {
+                                MCPSubTab.MARKETPLACE -> {
+                                    // MCP插件市场界面
+                                    MCPScreen(mcpRepository = mcpRepository)
+                                }
+                                MCPSubTab.CONFIG -> {
+                                    // MCP配置界面
+                                    MCPConfigScreen()
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -392,6 +561,128 @@ fun PackageManagerScreen() {
                             scriptExecutionResult = null
                         }
                 )
+            }
+
+            // Automation Package Details Dialog
+            if (showAutomationDetails && selectedAutomationPackage != null) {
+                AutomationPackageDetailsDialog(
+                    packageInfo = selectedAutomationPackage!!,
+                    packageManager = automationManager,
+                    onExecuteFunction = { function ->
+                        selectedAutomationFunction = function
+                        showAutomationDetails = false
+                        showAutomationExecution = true
+                    },
+                    onDismiss = { showAutomationDetails = false },
+                    onPackageDeleted = {
+                        scope.launch {
+                            // Refresh automation configs list after deletion
+                            automationConfigs.value = automationManager.getAllPackageInfo()
+                            snackbarHostState.showSnackbar("自动化配置删除成功")
+                        }
+                    }
+                )
+            }
+
+            // Automation Function Execution Dialog
+            if (showAutomationExecution && selectedAutomationFunction != null) {
+                AutomationFunctionExecutionDialog(
+                    function = selectedAutomationFunction!!,
+                    uiRouter = uiRouter,
+                    packageManager = automationManager,
+                    onDismiss = {
+                        showAutomationExecution = false
+                        selectedAutomationFunction = null
+                    }
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AutomationConfigList(
+    configs: List<AutomationPackageInfo>,
+    onConfigClick: (AutomationPackageInfo) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        items(configs) { config ->
+            Card(
+                onClick = { onConfigClick(config) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Build,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    
+                    Spacer(modifier = Modifier.width(8.dp))
+                    
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = config.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = config.description.takeIf { it.isNotBlank() } ?: "暂无描述",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                color = if (config.isBuiltIn) 
+                                    MaterialTheme.colorScheme.primaryContainer 
+                                else 
+                                    MaterialTheme.colorScheme.secondaryContainer,
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = if (config.isBuiltIn) "内置" else "外部",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (config.isBuiltIn)
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    else
+                                        MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = config.packageName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "查看详情",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
         }
     }

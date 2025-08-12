@@ -936,4 +936,72 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
         },
         executor = { tool -> runBlocking { computerDesktopTools.executeTool(tool) } }
     )
+
+    // UI自动化工具
+    val automationTools = com.ai.assistance.operit.core.tools.automatic.AutomationTools(context, handler)
+
+    // 搜索自动化配置
+    handler.registerTool(
+        name = "search_automation_config",
+        category = ToolCategory.UI_AUTOMATION,
+        descriptionGenerator = { tool ->
+            val packageName = tool.parameters.find { it.name == "package_name" }?.value
+            val appName = tool.parameters.find { it.name == "app_name" }?.value
+            when {
+                !packageName.isNullOrBlank() && !appName.isNullOrBlank() -> 
+                    "搜索自动化配置: 包名 '$packageName' 或应用名 '$appName'"
+                !packageName.isNullOrBlank() -> "搜索自动化配置: 包名 '$packageName'"
+                !appName.isNullOrBlank() -> "搜索自动化配置: 应用名 '$appName'"
+                else -> "搜索自动化配置"
+            }
+        },
+        executor = { tool -> runBlocking { automationTools.searchAutomationConfig(tool) } }
+    )
+
+    // 获取自动化计划参数
+    handler.registerTool(
+        name = "get_plan_parameters",
+        category = ToolCategory.UI_AUTOMATION,
+        descriptionGenerator = { tool ->
+            val functionName = tool.parameters.find { it.name == "function_name" }?.value ?: ""
+            val packageName = tool.parameters.find { it.name == "package_name" }?.value
+            if (packageName != null) {
+                "获取功能 '$functionName' 在应用 '$packageName' 中的执行参数"
+            } else {
+                "获取功能 '$functionName' 的执行参数"
+            }
+        },
+        executor = { tool -> runBlocking { automationTools.getPlanParameters(tool) } }
+    )
+
+    // 执行自动化计划
+    handler.registerTool(
+        name = "execute_automation_plan",
+        category = ToolCategory.UI_AUTOMATION,
+        dangerCheck = { true }, // 自动化执行可能是危险操作
+        descriptionGenerator = { tool ->
+            val parametersJson = tool.parameters.find { it.name == "parameters" }?.value
+            if (!parametersJson.isNullOrBlank()) {
+                "执行自动化计划 (带参数)"
+            } else {
+                "执行自动化计划"
+            }
+        },
+        executor = { tool -> runBlocking { automationTools.executePlan(tool) } }
+    )
+
+    // 获取可用的自动化功能列表
+    handler.registerTool(
+        name = "get_automation_functions",
+        category = ToolCategory.UI_AUTOMATION,
+        descriptionGenerator = { tool ->
+            val packageName = tool.parameters.find { it.name == "package_name" }?.value
+            if (packageName != null) {
+                "获取应用 '$packageName' 的可用自动化功能"
+            } else {
+                "获取所有可用的自动化功能"
+            }
+        },
+        executor = { tool -> runBlocking { automationTools.getAvailableFunctions(tool) } }
+    )
 }
