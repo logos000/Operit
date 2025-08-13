@@ -8,6 +8,8 @@ data class PromptProfile(
     val name: String,
     val introPrompt: String,
     val tonePrompt: String,
+    // 新增：提示词后缀（用于在系统提示词末尾附加的内容）
+    val suffixPrompt: String = "",
     val isActive: Boolean = false,
     val isDefault: Boolean = false
 ) 

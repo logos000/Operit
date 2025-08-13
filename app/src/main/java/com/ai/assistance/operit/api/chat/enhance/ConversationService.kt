@@ -161,18 +161,12 @@ class ConversationService(private val context: Context) {
         conversationMutex.withLock {
             // Add system prompt if not already present
             if (!chatHistory.any { it.first == "system" }) {
-                val activeProfile = preferencesManager.getUserPreferencesFlow().first()
-                val preferencesText = buildPreferencesText(activeProfile)
-
                 // Check if planning is enabled
                 val planningEnabled = apiPreferences.enableAiPlanningFlow.first()
 
                 // Get prompts for the specific function type from FunctionalPromptManager
                 val (introPrompt, tonePrompt) =
                         functionalPromptManager.getPromptForFunction(promptFunctionType)
-
-                // 获取自定义系统提示模板
-                val customSystemPromptTemplate = apiPreferences.customSystemPromptTemplateFlow.first()
 
                 // 获取系统提示词，现在传入workspacePath
                 val systemPrompt =
@@ -181,22 +175,11 @@ class ConversationService(private val context: Context) {
                         workspacePath,
                         planningEnabled,
                         introPrompt,
-                                tonePrompt,
-                                thinkingGuidance,
-                                customSystemPromptTemplate
+                        tonePrompt,
+                        thinkingGuidance
                 )
-
-                if (preferencesText.isNotEmpty()) {
-                    preparedHistory.add(
-                            0,
-                            Pair(
-                                    "system",
-                                    "$systemPrompt\n\nUser preference description: $preferencesText"
-                            )
-                    )
-                } else {
-                    preparedHistory.add(0, Pair("system", systemPrompt))
-                }
+                // 仅加入系统提示词，不再拼接用户偏好描述
+                preparedHistory.add(0, Pair("system", systemPrompt))
             }
 
             // Process each message in chat history
