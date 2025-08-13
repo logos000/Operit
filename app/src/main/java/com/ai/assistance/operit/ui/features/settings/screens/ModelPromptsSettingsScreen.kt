@@ -34,8 +34,6 @@ import com.ai.assistance.operit.data.preferences.PromptPreferencesManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.ai.assistance.operit.data.preferences.preferencesManager
-import com.ai.assistance.operit.core.tools.getPersonaKVJson
-import com.ai.assistance.operit.core.tools.setActivePersonaProfile
 import org.json.JSONObject
 import com.ai.assistance.operit.data.preferences.FunctionalPromptManager
 import com.ai.assistance.operit.data.preferences.PromptFunctionType
@@ -95,6 +93,8 @@ fun ModelPromptsSettingsScreen(
 
     // 下拉菜单状态
     var isDropdownExpanded by remember { mutableStateOf(false) }
+    // 后缀下拉菜单状态
+    var isSuffixDropdownExpanded by remember { mutableStateOf(false) }
 
     // 获取所有配置文件的名称映射(id -> name)
     val profileNameMap = remember { mutableStateMapOf<String, String>() }
@@ -299,39 +299,7 @@ fun ModelPromptsSettingsScreen(
                                     if (profileId != profileList.last()) Divider(modifier = Modifier.padding(horizontal = 8.dp), thickness = 0.5.dp)
                                 }
 
-                                Divider()
-                                Text(text = "人设卡", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                                personaProfileList.forEach { pid ->
-                                    val name = personaNameMap[pid] ?: pid
-                                    DropdownMenuItem(
-                                        text = { Text("从人设: $name", color = MaterialTheme.colorScheme.onSurface) },
-                                        leadingIcon = { Icon(Icons.Default.Portrait, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-                                        onClick = {
-                                            scope.launch {
-                                                val currentActive = preferencesManager.activeProfileIdFlow.first()
-                                                try {
-                                                    setActivePersonaProfile(pid)
-                                                    val kvJson = getPersonaKVJson()
-                                                    val merged = buildSillyTavernPromptFromKVJson(kvJson).ifBlank { combinedPromptInput }
-                                                    combinedPromptInput = merged
-                                                    val displayName = "人设·$name"
-                                                    val existingId = profileNameMap.entries.firstOrNull { it.value == displayName }?.key
-                                                    val promptManager = promptPreferencesManager
-                                                    val functionalManager = FunctionalPromptManager(context)
-                                                    val targetId = if (existingId != null) {
-                                                        promptManager.updatePromptProfile(profileId = existingId, introPrompt = merged, tonePrompt = " "); existingId
-                                                    } else {
-                                                        promptManager.createProfile(name = displayName, introPrompt = merged, tonePrompt = " ")
-                                                    }
-                                                    selectedProfileId = targetId
-                                                    functionalManager.setPromptProfileForFunction(PromptFunctionType.CHAT, targetId)
-                                                    isDropdownExpanded = false
-                                                    editMode = false
-                                                } finally { setActivePersonaProfile(currentActive) }
-                                            }
-                                        }
-                                    )
-                                }
+
                             }
                         }
 
@@ -568,11 +536,7 @@ fun ModelPromptsSettingsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(value = newProfileName, onValueChange = { newProfileName = it }, label = { Text(stringResource(R.string.config_name), fontSize = 12.sp) }, placeholder = { Text(stringResource(R.string.config_name_placeholder), fontSize = 12.sp) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), singleLine = true)
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedButton(onClick = { showAddProfileDialog = false; newProfileName = ""; onNavigateToPersonaGenerator() }, shape = RoundedCornerShape(8.dp)) {
-                        Icon(Icons.Default.SmartToy, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("使用AI生成人设卡")
-                    }
+
                 }
             },
             confirmButton = {
