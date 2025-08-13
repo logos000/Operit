@@ -21,7 +21,6 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.core.tools.automatic.*
-import com.ai.assistance.operit.core.tools.automatic.config.AutomationPackageManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import android.util.Log
@@ -49,37 +48,21 @@ fun AutomationToolScreen(
     var showParameterDialog by remember { mutableStateOf(false) }
     var functionParameters by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     
-    // 初始化UIRouter
+    // 初始化UIRouter（这里使用示例配置）
     val uiRouter = remember {
         Log.d(TAG, "Initializing UIRouter.")
-        UIRouter(context, toolHandler)
-    }
+        UIRouter(context, toolHandler).apply {
+            // 加载示例配置
+            Log.d(TAG, "Loading sample config...")
+            val sampleConfig = createSampleConfig()
+            loadConfig(sampleConfig)
+            Log.d(TAG, "Sample config loaded.")
 
-    LaunchedEffect(uiRouter) {
-        scope.launch(Dispatchers.IO) {
-            Log.d(TAG, "Loading automation configs...")
-            val automationManager = AutomationPackageManager.getInstance(context)
-            val allConfigs = automationManager.getAllPackageInfo()
-
-            // 创建一个基础配置
-            val baseConfig = createSampleConfig()
-            uiRouter.loadConfig(baseConfig)
-
-            allConfigs.forEach { info ->
-                try {
-                    val config = automationManager.getConfigByAppPackageName(info.packageName)
-                    config?.let {
-                        uiRouter.loadConfig(it, merge = true)
-                        Log.d(TAG, "Successfully merged config for ${info.packageName}")
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to load or merge config for ${info.packageName}", e)
-                }
-            }
-            
-            Log.d(TAG, "All configs loaded. Getting available functions.")
-            availableFunctions = uiRouter.getAvailableFunctions()
-            Log.d(TAG, "Available functions updated: ${availableFunctions.size} functions.")
+            // 加载并合并其他配置
+            Log.d(TAG, "Loading and merging pay app exit config...")
+            val payAppExitConfig = UIRouteConfig.loadPayAppExitConfig()
+            loadConfig(payAppExitConfig, merge = true)
+            Log.d(TAG, "Pay app exit config merged.")
         }
     }
 

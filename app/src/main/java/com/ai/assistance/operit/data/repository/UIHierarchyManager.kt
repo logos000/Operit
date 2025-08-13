@@ -13,7 +13,6 @@ import android.util.Log
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.ai.assistance.operit.R
-import com.ai.assistance.operit.core.tools.system.AccessibilityProviderInstaller
 import com.ai.assistance.operit.provider.IAccessibilityProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,8 +26,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.StringReader
 import kotlin.coroutines.resume
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 
 /**
  * UI层次结构管理器
@@ -97,59 +94,42 @@ object UIHierarchyManager {
     /**
      * 启动安装流程来安装提供者应用
      */
-    fun launchProviderInstall(context: Context) {
-        GlobalScope.launch(Dispatchers.IO) {
-            val apkFile = extractProviderApkFromAssets(context)
-            if (apkFile == null) {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.toast_apk_extract_failed),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-                return@launch
-            }
-
-            val apkUri =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        apkFile
-                    )
-                } else {
-                    Uri.fromFile(apkFile)
-                }
-
-            val installIntent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(apkUri, "application/vnd.android.package-archive")
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-            }
-
+    suspend fun launchProviderInstall(context: Context) {
+        val apkFile = extractProviderApkFromAssets(context)
+        if (apkFile == null) {
             withContext(Dispatchers.Main) {
-                try {
-                    context.startActivity(installIntent)
-                } catch (e: Exception) {
-                    Log.e(TAG, "启动安装界面失败", e)
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.toast_operation_failed, e.message ?: ""),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
+                Toast.makeText(context, context.getString(R.string.toast_apk_extract_failed), Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+
+        val apkUri =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    apkFile
+                )
+            } else {
+                Uri.fromFile(apkFile)
+            }
+
+        val installIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(apkUri, "application/vnd.android.package-archive")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         }
-    }
 
-    /**
-     * 检查无障碍服务提供者是否需要更新
-     */
-    fun isUpdateNeeded(context: Context): Boolean {
-        return AccessibilityProviderInstaller.isUpdateNeeded(context)
+        withContext(Dispatchers.Main) {
+            try {
+                context.startActivity(installIntent)
+            } catch (e: Exception) {
+                Log.e(TAG, "启动安装界面失败", e)
+                Toast.makeText(context, context.getString(R.string.toast_operation_failed, e.message ?: ""), Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     /**

@@ -130,18 +130,15 @@ open class AccessibilityUITools(context: Context) : StandardUITools(context) {
             if (hierarchyXml.isEmpty()) {
                 Log.w(TAG, "无法获取UI层次结构XML，使用默认值。")
                 focusInfo.packageName = "android"
-                // 即使XML获取失败，仍然尝试获取Activity名称
-                focusInfo.activityName = UIHierarchyManager.getCurrentActivityName(context) ?: "ForegroundActivity"
+                focusInfo.activityName = "ForegroundActivity"
                 return focusInfo
             }
 
-            // 2. 从XML中解析包名
-            val (packageName, _) = UIHierarchyManager.extractWindowInfo(hierarchyXml)
-            // 3. 从服务中直接获取当前Activity名称
-            val activityName = UIHierarchyManager.getCurrentActivityName(context)
+            // 2. 从XML中解析窗口信息
+            val (packageName, className) = UIHierarchyManager.extractWindowInfo(hierarchyXml)
 
             focusInfo.packageName = packageName
-            focusInfo.activityName = activityName // 使用从服务获取的Activity名称
+            focusInfo.activityName = className // 使用完整的类名
 
             // 如果没有获取到，使用默认值
             if (focusInfo.packageName == null) focusInfo.packageName = "android"
@@ -221,79 +218,59 @@ open class AccessibilityUITools(context: Context) : StandardUITools(context) {
     override suspend fun clickElement(tool: AITool): ToolResult {
         return try {
             withAccessibilityCheck(tool) {
-                val resourceId = tool.parameters.find { it.name == "resourceId" }?.value
-                val className = tool.parameters.find { it.name == "className" }?.value
-                val contentDesc = tool.parameters.find { it.name == "contentDesc" }?.value
-                val index = tool.parameters.find { it.name == "index" }?.value?.toIntOrNull() ?: 0
-                val bounds = tool.parameters.find { it.name == "bounds" }?.value
+        val resourceId = tool.parameters.find { it.name == "resourceId" }?.value
+        val className = tool.parameters.find { it.name == "className" }?.value
+        val index = tool.parameters.find { it.name == "index" }?.value?.toIntOrNull() ?: 0
+        val bounds = tool.parameters.find { it.name == "bounds" }?.value
 
-                if (resourceId == null && className == null && bounds == null && contentDesc == null) {
+        if (resourceId == null && className == null && bounds == null) {
                     return@withAccessibilityCheck ToolResult(
-                        toolName = tool.name,
-                        success = false,
-                        result = StringResultData(""),
-                        error = "Missing element identifier. Provide at least one of 'resourceId', 'className', 'contentDesc', or 'bounds'."
-                    )
-                }
+                    toolName = tool.name,
+                    success = false,
+                    result = StringResultData(""),
+                        error = "Missing element identifier. Provide at least one of 'resourceId', 'className', or 'bounds'."
+            )
+        }
 
-                // 如果提供了边界坐标，直接解析并点击中心点
-                if (bounds != null) {
+            // 如果提供了边界坐标，直接解析并点击中心点
+            if (bounds != null) {
                     return@withAccessibilityCheck handleClickByBounds(tool, bounds)
-                }
+            }
 
-                // 获取UI层次结构XML（带重试）
-                val uiXml = getUIHierarchyWithRetry()
-                if (uiXml.isEmpty()) {
+            // 获取UI层次结构XML（带重试）
+            val uiXml = getUIHierarchyWithRetry()
+            if (uiXml.isEmpty()) {
                     return@withAccessibilityCheck ToolResult(toolName = tool.name, success = false, result = StringResultData(""), error = "Unable to get UI hierarchy.")
-                }
-
-                // 在XML中查找匹配的节点
-                val matchedNodes = findNodesInXml(uiXml) { nodeParser ->
-                    val hasSelectors = resourceId != null || className != null || contentDesc != null
-                    if (!hasSelectors) {
-                        return@findNodesInXml false
                     }
 
-                    val nodeId = nodeParser.getAttributeValue(null, "resource-id")
-                    val nodeClass = nodeParser.getAttributeValue(null, "class")
-                    val nodeDesc = nodeParser.getAttributeValue(null, "content-desc")
+            // 在XML中查找匹配的节点
+            val matchedNodes = findNodesInXml(uiXml) { nodeParser ->
+                val nodeId = nodeParser.getAttributeValue(null, "resource-id")
+                val nodeClass = nodeParser.getAttributeValue(null, "class")
+                (resourceId != null && nodeId != null && nodeId.endsWith(resourceId)) || (className != null && nodeClass != null && nodeClass.contains(className))
+            }
 
-                    if(resourceId !=null && nodeId != null && !nodeId.endsWith(resourceId)){
-                        return@findNodesInXml false
-                    }
-
-                    if(className != null && nodeClass != null && nodeClass != className){
-                        return@findNodesInXml false
-                    }
-
-                    if(contentDesc != null && nodeDesc != null && !nodeDesc.equals(contentDesc, ignoreCase = true)){
-                        return@findNodesInXml false
-                    }
-                    
-                    true
-                }
-
-                if (matchedNodes.isEmpty()) {
+            if (matchedNodes.isEmpty()) {
                     return@withAccessibilityCheck ToolResult(toolName = tool.name, success = false, result = StringResultData(""), error = "No matching element found.")
-                }
+                    }
 
-                // 检查索引是否有效
-                if (index < 0 || index >= matchedNodes.size) {
+            // 检查索引是否有效
+            if (index < 0 || index >= matchedNodes.size) {
                     return@withAccessibilityCheck ToolResult(
-                        toolName = tool.name,
-                        success = false,
-                        result = StringResultData(""),
-                        error = "Index out of range. Found ${matchedNodes.size} elements, but requested index $index."
+                            toolName = tool.name,
+                            success = false,
+                            result = StringResultData(""),
+                    error = "Index out of range. Found ${matchedNodes.size} elements, but requested index $index."
                     )
-                }
+            }
 
-                // 获取目标节点的bounds
-                val targetNodeBounds = matchedNodes[index].bounds
-                if (targetNodeBounds == null) {
+            // 获取目标节点的bounds
+            val targetNodeBounds = matchedNodes[index].bounds
+            if (targetNodeBounds == null) {
                     return@withAccessibilityCheck ToolResult(toolName = tool.name, success = false, result = StringResultData(""), error = "Target element has no bounds.")
-                }
+            }
 
-                // 解析bounds并点击
+            // 解析bounds并点击
                 handleClickByBounds(tool, targetNodeBounds)
             }
         } catch (e: Exception) {

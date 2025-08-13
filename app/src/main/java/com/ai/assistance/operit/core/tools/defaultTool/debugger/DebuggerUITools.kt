@@ -179,17 +179,16 @@ open class DebuggerUITools(context: Context) : AccessibilityUITools(context) {
 
         val resourceId = tool.parameters.find { it.name == "resourceId" }?.value
         val className = tool.parameters.find { it.name == "className" }?.value
-        val contentDesc = tool.parameters.find { it.name == "contentDesc" }?.value
         val index = tool.parameters.find { it.name == "index" }?.value?.toIntOrNull() ?: 0
         val bounds = tool.parameters.find { it.name == "bounds" }?.value
 
-        if (resourceId == null && className == null && bounds == null && contentDesc == null) {
+        if (resourceId == null && className == null && bounds == null) {
             return ToolResult(
                     toolName = tool.name,
                     success = false,
                     result = StringResultData(""),
                     error =
-                            "Missing element identifier. Provide at least one of: 'resourceId', 'className', 'contentDesc', or 'bounds'."
+                            "Missing element identifier. Provide at least one of: 'resourceId', 'className', or 'bounds'."
             )
         }
 
@@ -1149,7 +1148,6 @@ open class DebuggerUITools(context: Context) : AccessibilityUITools(context) {
 
         val resourceId = tool.parameters.find { it.name == "resourceId" }?.value
         val className = tool.parameters.find { it.name == "className" }?.value
-        val contentDesc = tool.parameters.find { it.name == "contentDesc" }?.value
         val index = tool.parameters.find { it.name == "index" }?.value?.toIntOrNull() ?: 0
 
         try {
@@ -1200,30 +1198,13 @@ open class DebuggerUITools(context: Context) : AccessibilityUITools(context) {
                         else "class=\".*?${Regex.escape(className)}\"".toRegex()
                     } else null
 
-            val contentDescPattern =
-                if (contentDesc != null) {
-                    if (partialMatch) "content-desc=\".*?${Regex.escape(contentDesc)}.*?\"".toRegex()
-                    else "content-desc=\"${Regex.escape(contentDesc)}\"".toRegex()
-                } else null
-
             val boundsPattern = "bounds=\"\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]\"".toRegex()
 
             // 提取节点元素
             val nodeRegexPattern = StringBuilder("<node[^>]*?")
-
-            // 检查是否至少有一个选择器
-            val hasSelectors = resourceId != null || className != null || contentDesc != null
-            if (!hasSelectors) {
-                // 如果没有选择器，则不应匹配任何内容
-                // 我们可以构建一个不可能匹配的正则表达式
-                nodeRegexPattern.append(" impossible-attribute='impossible-value'")
-            } else {
-                if (resourceIdPattern != null)
-                        nodeRegexPattern.append(".*?${resourceIdPattern.pattern}")
-                if (classNamePattern != null) nodeRegexPattern.append(".*?${classNamePattern.pattern}")
-                if (contentDescPattern != null) nodeRegexPattern.append(".*?${contentDescPattern.pattern}")
-            }
-            
+            if (resourceIdPattern != null)
+                    nodeRegexPattern.append(".*?${resourceIdPattern.pattern}")
+            if (classNamePattern != null) nodeRegexPattern.append(".*?${classNamePattern.pattern}")
             nodeRegexPattern.append("[^>]*?>")
 
             val nodeRegex = nodeRegexPattern.toString().toRegex()
@@ -1282,7 +1263,6 @@ open class DebuggerUITools(context: Context) : AccessibilityUITools(context) {
                 val identifierDescription =
                         when {
                             resourceId != null -> " with resource ID: $resourceId"
-                            contentDesc != null -> " with content description: $contentDesc"
                             else -> " with class name: $className"
                         }
 
@@ -1300,7 +1280,7 @@ open class DebuggerUITools(context: Context) : AccessibilityUITools(context) {
                                         actionDescription =
                                                 "Successfully clicked element$identifierDescription$matchCount at coordinates ($centerX, $centerY) via shell command",
                                         coordinates = Pair(centerX, centerY),
-                                        elementId = resourceId ?: className ?: contentDesc
+                                        elementId = resourceId ?: className
                                 ),
                         error = ""
                 )

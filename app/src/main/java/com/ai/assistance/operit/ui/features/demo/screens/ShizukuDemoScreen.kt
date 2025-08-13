@@ -23,7 +23,6 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.core.tools.system.AndroidPermissionLevel
-import com.ai.assistance.operit.core.tools.system.AccessibilityProviderInstaller
 import com.ai.assistance.operit.core.tools.system.ShizukuAuthorizer
 import com.ai.assistance.operit.core.tools.system.ShizukuInstaller
 import com.ai.assistance.operit.core.tools.system.termux.TermuxInstaller
@@ -290,15 +289,6 @@ fun ShizukuDemoScreen(
                     )
                     Triple(installed, bundled, needsUpdate)
                 }
-        
-        // 检查无障碍服务版本状态
-        val (accessibilityInstalledVersion, accessibilityBundledVersion, isAccessibilityUpdateNeeded) =
-            remember {
-                val installed = AccessibilityProviderInstaller.getInstalledVersion(context)
-                val bundled = AccessibilityProviderInstaller.getBundledVersion(context)
-                val needsUpdate = AccessibilityProviderInstaller.isUpdateNeeded(context)
-                Triple(installed, bundled, needsUpdate)
-            }
 
         val needShizukuSetupGuide =
                 currentDisplayedPermissionLevel == AndroidPermissionLevel.DEBUGGER &&
@@ -314,13 +304,11 @@ fun ShizukuDemoScreen(
         val needRootSetupGuide =
                 currentDisplayedPermissionLevel == AndroidPermissionLevel.ROOT &&
                         (!uiState.hasRootAccess.value)
-    
+
         val needAccessibilitySetupGuide =
             (currentDisplayedPermissionLevel == AndroidPermissionLevel.ACCESSIBILITY ||
-                    currentDisplayedPermissionLevel == AndroidPermissionLevel.DEBUGGER) &&
-                    (!uiState.isAccessibilityProviderInstalled.value ||
-                            !uiState.hasAccessibilityServiceEnabled.value ||
-                            isAccessibilityUpdateNeeded)
+             currentDisplayedPermissionLevel == AndroidPermissionLevel.DEBUGGER) &&
+                    (!uiState.isAccessibilityProviderInstalled.value || !uiState.hasAccessibilityServiceEnabled.value)
 
 
         val needSetupGuide = needTermuxSetupGuide || needShizukuSetupGuide || needRootSetupGuide || needAccessibilitySetupGuide
@@ -374,14 +362,6 @@ fun ShizukuDemoScreen(
                             context.startActivity(intent)
                         } catch (e: Exception) {
                             Toast.makeText(context, "无法打开无障碍服务设置", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    updateNeeded = isAccessibilityUpdateNeeded,
-                    installedVersion = accessibilityInstalledVersion,
-                    bundledVersion = accessibilityBundledVersion,
-                    onUpdateProvider = {
-                        scope.launch(Dispatchers.IO) {
-                            UIHierarchyManager.launchProviderInstall(context)
                         }
                     }
                 )

@@ -26,10 +26,6 @@ import com.ai.assistance.operit.R
  * @param onToggleWizard 切换向导显示状态的回调
  * @param onInstallProvider 安装服务提供者的回调
  * @param onOpenAccessibilitySettings 打开无障碍设置页面的回调
- * @param updateNeeded 是否需要更新
- * @param installedVersion 已安装的版本
- * @param bundledVersion 内置的版本
- * @param onUpdateProvider 更新服务提供者的回调
  */
 @Composable
 fun AccessibilityWizardCard(
@@ -38,11 +34,7 @@ fun AccessibilityWizardCard(
     showWizard: Boolean,
     onToggleWizard: () -> Unit,
     onInstallProvider: () -> Unit,
-    onOpenAccessibilitySettings: () -> Unit,
-    updateNeeded: Boolean,
-    installedVersion: String?,
-    bundledVersion: String,
-    onUpdateProvider: () -> Unit
+    onOpenAccessibilitySettings: () -> Unit
 ) {
     var showWarningDialog by remember { mutableStateOf(false) }
     var confirmText by remember { mutableStateOf("") }
@@ -227,39 +219,27 @@ fun AccessibilityWizardCard(
 
                     // 全部完成
                     else -> {
-                        Column {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = RoundedCornerShape(8.dp)
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.size(24.dp)
-                                    )
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(24.dp)
+                                )
 
-                                    Spacer(modifier = Modifier.width(12.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
 
-                                    Text(
-                                        stringResource(R.string.accessibility_wizard_success_message),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                }
-                            }
-
-                            // 如果需要更新，显示更新提示
-                            if (updateNeeded) {
-                                Spacer(modifier = Modifier.height(12.dp))
-                                UpdateAvailableInfo(
-                                    installedVersion = installedVersion,
-                                    bundledVersion = bundledVersion,
-                                    onUpdate = onUpdateProvider
+                                Text(
+                                    stringResource(R.string.accessibility_wizard_success_message),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                             }
                         }
@@ -343,42 +323,5 @@ fun AccessibilityWizardCard(
                 }
             }
         )
-    }
-}
-
-/**
- * 显示有可用更新的信息组件
- */
-@Composable
-private fun UpdateAvailableInfo(
-    installedVersion: String?,
-    bundledVersion: String,
-    onUpdate: () -> Unit
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                "检测到新版本",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                "已安装: ${installedVersion ?: "N/A"} -> 内置: $bundledVersion",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = onUpdate,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("立即更新")
-            }
-        }
     }
 } 

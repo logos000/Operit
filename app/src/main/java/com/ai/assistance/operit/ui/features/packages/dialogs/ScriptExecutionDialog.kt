@@ -1,20 +1,30 @@
 package com.ai.assistance.operit.ui.features.packages.dialogs
 
 import android.util.Log
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -46,8 +56,10 @@ fun ScriptExecutionDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    // State for script editor
     var scriptText by remember(tool) { mutableStateOf(tool.script) }
-    var paramValues by remember(tool) { mutableStateOf(tool.parameters.associate { it.name to "" }) }
+    var paramValues by
+            remember(tool) { mutableStateOf(tool.parameters.associate { it.name to "" }) }
     var executing by remember { mutableStateOf(false) }
     var executionResults by remember { mutableStateOf<List<ToolResult>>(emptyList()) }
 
@@ -59,264 +71,306 @@ fun ScriptExecutionDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
-            modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface
+                modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp),
+                shape = RoundedCornerShape(16.dp)
         ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
-                // 紧凑的标题栏
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Code,
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "脚本执行",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = tool.name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+            Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
+                // Header
+                Text(
+                        text = "Script Execution: ${tool.name}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                    // 脚本编辑器
+                    // Script Editor
                     Text(
-                        text = "脚本代码",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                        ),
-                        border = BorderStroke(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                        )
-                    ) {
-                        TextField(
-                            value = scriptText,
-                            onValueChange = { newValue -> scriptText = newValue },
-                            modifier = Modifier.fillMaxWidth().height(160.dp),
-                            textStyle = MaterialTheme.typography.bodySmall.copy(
-                                fontFamily = FontFamily.Monospace
-                            ),
-                            colors = TextFieldDefaults.colors(
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent
-                            ),
-                            placeholder = { 
-                                Text(
-                                    "编写JavaScript代码...",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                ) 
-                            }
-                        )
-                    }
-
-                    // 参数输入
-                    if (tool.parameters.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "参数配置",
+                            text = "Script Code:" + ":",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
+                    )
+
+                    TextField(
+                            value = scriptText,
+                            onValueChange = { newValue -> scriptText = newValue },
+                            modifier = Modifier.fillMaxWidth().height(200.dp),
+                            textStyle =
+                                    MaterialTheme.typography.bodyMedium.copy(
+                                            fontFamily = FontFamily.Monospace
+                                    ),
+                            colors =
+                                    TextFieldDefaults.textFieldColors(
+                                            containerColor = Color(0xFF1E1E1E),
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White,
+                                            cursorColor = Color.White,
+                                            focusedIndicatorColor = MaterialTheme.colorScheme.primary
+                                    )
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Parameters
+                    if (tool.parameters.isNotEmpty()) {
+                        Text(
+                                text = "Script Parameters:" + ":",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        tool.parameters.forEach { param ->
-                            OutlinedTextField(
-                                value = paramValues[param.name] ?: "",
-                                onValueChange = { value ->
-                                    paramValues = paramValues.toMutableMap().apply {
-                                        put(param.name, value)
-                                    }
-                                },
-                                label = {
-                                    Text("${param.name}${if (param.required) " *" else ""}")
-                                },
+                        // Parameter inputs
+                        Column(
                                 modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                placeholder = { Text(param.description) }
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            tool.parameters.forEach { param ->
+                                OutlinedTextField(
+                                        value = paramValues[param.name] ?: "",
+                                        onValueChange = { value ->
+                                            paramValues =
+                                                    paramValues.toMutableMap().apply {
+                                                        put(param.name, value)
+                                                    }
+                                        },
+                                        label = {
+                                            Text("${param.name}${if (param.required) " *" else ""}")
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true
+                                )
+                            }
                         }
+
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
 
-                    // 执行结果
+                    // Result area
                     if (executionResults.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "执行结果",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                                text = "Execution Results:" + ":",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
 
                         LazyColumn(
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 150.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                modifier =
+                                        Modifier.fillMaxWidth()
+                                                .heightIn(max = 240.dp)
+                                                .border(
+                                                        width = 1.dp,
+                                                        color = MaterialTheme.colorScheme.outline,
+                                                        shape = RoundedCornerShape(8.dp)
+                                                )
+                                                .padding(vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(executionResults) { result ->
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (result.success) 
-                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                                        else 
-                                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-                                    )
+                                Surface(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(8.dp).fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
+                                            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                            verticalAlignment = Alignment.Top
                                     ) {
+                                        val success = result.success
                                         Icon(
-                                            imageVector = if (result.success) Icons.Filled.CheckCircle else Icons.Filled.Error,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                            tint = if (result.success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                                imageVector =
+                                                        if (success) Icons.Filled.CheckCircle
+                                                        else Icons.Filled.Error,
+                                                contentDescription =
+                                                        if (success) "Success" else "Error",
+                                                tint =
+                                                        if (success) Color(0xFF4CAF50)
+                                                        else Color(0xFFF44336)
                                         )
-                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Spacer(Modifier.width(8.dp))
                                         Text(
-                                            text = if (result.success) result.result.toString() else "错误: ${result.error}",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            modifier = Modifier.weight(1f)
+                                                text =
+                                                        if (result.success) result.result.toString()
+                                                        else "Error: ${result.error}",
+                                                style = MaterialTheme.typography.bodyMedium
                                         )
                                     }
                                 }
                             }
                         }
+
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // Buttons
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text(text = "Cancel") }
 
-                // 操作按钮
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
-                ) {
-                    OutlinedButton(onClick = onDismiss) {
-                        Text("取消")
-                    }
+                    Spacer(modifier = Modifier.width(8.dp))
 
-                    FilledTonalButton(
-                        onClick = {
-                            executing = true
-                            executionResults = emptyList()
-                            scope.launch(Dispatchers.IO) {
-                                try {
-                                    val missingParams = tool.parameters
-                                        .filter { it.required }
-                                        .map { it.name }
-                                        .filter { paramValues[it].isNullOrEmpty() }
+                    Button(
+                            onClick = {
+                                executing = true
+                                executionResults = emptyList() // Clear previous results
+                                scope.launch(Dispatchers.IO) {
+                                    try {
+                                        // Check for required parameters
+                                        val missingParams =
+                                                tool.parameters
+                                                        .filter { it.required }
+                                                        .map { it.name }
+                                                        .filter { paramValues[it].isNullOrEmpty() }
 
-                                    if (missingParams.isNotEmpty()) {
-                                        val missingResult = ToolResult(
-                                            toolName = "${packageName}:${tool.name}",
-                                            success = false,
-                                            result = StringResultData(""),
-                                            error = "缺少参数: ${missingParams.joinToString(", ")}"
+                                        if (missingParams.isNotEmpty()) {
+                                            val missingResult =
+                                                    ToolResult(
+                                                            toolName =
+                                                                    "${packageName}:${tool.name}",
+                                                            success = false,
+                                                            result = StringResultData(""),
+                                                            error =
+                                                                    "Missing parameters: ${missingParams.joinToString(", ")}"
+                                                    )
+                                            withContext(Dispatchers.Main) {
+                                                executionResults = listOf(missingResult)
+                                                onExecuted(missingResult)
+                                            }
+                                        } else {
+                                            // Create the tool with parameters
+                                            val parameters =
+                                                    paramValues.map { (name, value) ->
+                                                        ToolParameter(name = name, value = value)
+                                                    }
+
+                                            val aiTool =
+                                                    AITool(
+                                                            name = "${packageName}:${tool.name}",
+                                                            parameters = parameters
+                                                    )
+
+                                            // Create a new interpreter instance
+                                            val interpreter =
+                                                    JsToolManager.getInstance(
+                                                            context,
+                                                            packageManager
+                                                    )
+
+                                            // Execute the script and collect results from the flow
+                                            interpreter
+                                                    .executeScript(scriptText, aiTool)
+                                                    .catch { e ->
+                                                        Log.e(
+                                                                "ScriptExecutionDialog",
+                                                                "Flow collection error",
+                                                                e
+                                                        )
+                                                        val errorResult =
+                                                                ToolResult(
+                                                                        toolName =
+                                                                                "${packageName}:${tool.name}",
+                                                                        success = false,
+                                                                        result = StringResultData(""),
+                                                                        error =
+                                                                                "Execution flow error: ${e.message}"
+                                                                )
+                                                        withContext(Dispatchers.Main) {
+                                                            executionResults =
+                                                                    executionResults + errorResult
+                                                            onExecuted(errorResult)
+                                                        }
+                                                    }
+                                                    .onCompletion {
+                                                        withContext(Dispatchers.Main) {
+                                                            executing = false
+                                                        }
+                                                    }
+                                                    .collect { result ->
+                                                        withContext(Dispatchers.Main) {
+                                                            executionResults =
+                                                                    executionResults + result
+                                                            onExecuted(result)
+                                                        }
+                                                    }
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.e(
+                                                "ScriptExecutionDialog",
+                                                "Failed to execute script",
+                                                e
                                         )
+
+                                        // Final catch-all for unexpected errors
                                         withContext(Dispatchers.Main) {
-                                            executionResults = listOf(missingResult)
-                                            onExecuted(missingResult)
+                                            val finalError =
+                                                    ToolResult(
+                                                            toolName =
+                                                                    "${packageName}:${tool.name}",
+                                                            success = false,
+                                                            result = StringResultData(""),
+                                                            error = "Execution error: ${e.message}"
+                                                    )
+                                            executionResults = executionResults + finalError
+                                            onExecuted(finalError)
                                         }
-                                    } else {
-                                        val parameters = paramValues.map { (name, value) ->
-                                            ToolParameter(name = name, value = value)
-                                        }
-
-                                        val aiTool = AITool(
-                                            name = "${packageName}:${tool.name}",
-                                            parameters = parameters
-                                        )
-
-                                        val interpreter = JsToolManager.getInstance(context, packageManager)
-
-                                        interpreter
-                                            .executeScript(scriptText, aiTool)
-                                            .catch { e ->
-                                                Log.e("ScriptExecutionDialog", "Flow collection error", e)
-                                                val errorResult = ToolResult(
-                                                    toolName = "${packageName}:${tool.name}",
-                                                    success = false,
-                                                    result = StringResultData(""),
-                                                    error = "执行流错误: ${e.message}"
-                                                )
-                                                withContext(Dispatchers.Main) {
-                                                    executionResults = executionResults + errorResult
-                                                    onExecuted(errorResult)
-                                                }
-                                            }
-                                            .onCompletion {
-                                                withContext(Dispatchers.Main) {
-                                                    executing = false
-                                                }
-                                            }
-                                            .collect { result ->
-                                                withContext(Dispatchers.Main) {
-                                                    executionResults = executionResults + result
-                                                    onExecuted(result)
-                                                }
-                                            }
+                                    } finally {
+                                        withContext(Dispatchers.Main) { executing = false }
                                     }
-                                } catch (e: Exception) {
-                                    Log.e("ScriptExecutionDialog", "Failed to execute script", e)
-                                    withContext(Dispatchers.Main) {
-                                        val finalError = ToolResult(
-                                            toolName = "${packageName}:${tool.name}",
-                                            success = false,
-                                            result = StringResultData(""),
-                                            error = "执行错误: ${e.message}"
-                                        )
-                                        executionResults = executionResults + finalError
-                                        onExecuted(finalError)
-                                    }
-                                } finally {
-                                    withContext(Dispatchers.Main) { executing = false }
                                 }
-                            }
-                        },
-                        enabled = !executing
+                            },
+                            enabled = !executing,
+                            colors =
+                                    ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary
+                                    )
                     ) {
                         if (executing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("执行中")
+                            // 使用自定义的简单加载指示器替代CircularProgressIndicator
+                            Box(
+                                    modifier =
+                                            Modifier.size(20.dp)
+                                                    .background(
+                                                            MaterialTheme.colorScheme.onPrimary,
+                                                            CircleShape
+                                                    ),
+                                    contentAlignment = Alignment.Center
+                            ) {
+                                // 添加一个旋转动画
+                                val infiniteTransition = rememberInfiniteTransition()
+                                val rotation by
+                                        infiniteTransition.animateFloat(
+                                                initialValue = 0f,
+                                                targetValue = 360f,
+                                                animationSpec =
+                                                        infiniteRepeatable(
+                                                                animation =
+                                                                        tween(
+                                                                                1000,
+                                                                                easing =
+                                                                                        LinearEasing
+                                                                        ),
+                                                                repeatMode = RepeatMode.Restart
+                                                        )
+                                        )
+
+                                Box(
+                                        modifier =
+                                                Modifier.size(16.dp)
+                                                        .graphicsLayer { rotationZ = rotation }
+                                                        .background(
+                                                                color =
+                                                                        MaterialTheme.colorScheme
+                                                                                .primary,
+                                                                shape = CircleShape
+                                                        )
+                                )
+                            }
                         } else {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("执行")
+                            Text(text = "Execute Script")
                         }
                     }
                 }

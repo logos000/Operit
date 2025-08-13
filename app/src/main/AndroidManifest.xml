@@ -166,12 +166,6 @@
             android:name=".services.TermuxCommandResultService"
             android:exported="false" />
         
-        <service
-            android:name=".services.UIDebuggerService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="specialUse" />
-        
     </application>
 
 </manifest>

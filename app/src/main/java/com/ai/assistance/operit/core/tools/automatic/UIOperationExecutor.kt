@@ -11,7 +11,6 @@ import com.ai.assistance.operit.util.map.NodeState
 import com.ai.assistance.operit.util.map.StatefulPath
 import com.ai.assistance.operit.util.map.StatefulEdge
 import kotlinx.coroutines.delay
-import com.ai.assistance.operit.core.tools.StringResultData
 import org.json.JSONObject
 
 private const val TAG = "UIOperationExecutor"
@@ -27,7 +26,6 @@ class UIOperationExecutor(
 ) {
     companion object {
         private const val OPERATION_DELAY = 500L
-        private const val STARTUP_DELAY = 2000L // 启动应用后的额外等待时间
         private const val FOCUS_DELAY = 300L
         private const val SEQUENTIAL_OP_DELAY = 200L
         private const val MAX_STATE_VERIFICATION_RETRY = 3
@@ -197,79 +195,14 @@ class UIOperationExecutor(
         Log.d(TAG, "Executing operation: ${operation::class.java.simpleName} with description: '${operation.description}'")
         return when (operation) {
             is UIOperation.Click -> {
-                // 如果提供了相对坐标，则使用find+tap的组合来实现精确点击
-                if (operation.relativeX != null && operation.relativeY != null) {
-                    // 1. 查找元素以获取其边界
-                    val findParams = createSelectorParams(operation.selector, state) // 不传递clickOperation以避免添加相对坐标参数
-                    val findTool = AITool("find_element", findParams)
-                    Log.d(TAG, "Executing 'find_element' to get bounds for relative click. Params: $findParams")
-                    val findResult = toolHandler.executeTool(findTool)
-
-                    if (!findResult.success || findResult.result == null) {
-                        Log.w(TAG, "Relative click failed: could not find element. ${findResult.error}")
-                        return false
-                    }
-
-                    // 2. 从结果中解析边界
-                    val resultString = (findResult.result as? StringResultData)?.value ?: ""
-                    if (resultString.isEmpty()) {
-                        Log.w(TAG, "Relative click failed: find_element returned an empty result.")
-                        return false
-                    }
-
-                    try {
-                        val jsonResult = JSONObject(resultString)
-                        val elementJson = jsonResult.optJSONObject("element")
-                        val boundsString = elementJson?.optString("bounds")
-
-                        if (boundsString.isNullOrEmpty()) {
-                            Log.w(TAG, "Relative click failed: 'bounds' not found for element in find_element result.")
-                            return false
-                        }
-
-                        // 3. 解析边界字符串并计算精确的点击点
-                        val parts = boundsString.replace("[", "").replace("]", ",").split(",").filter { it.isNotEmpty() }
-                        if (parts.size < 4) {
-                            Log.w(TAG, "Relative click failed: invalid bounds format '$boundsString'.")
-                            return false
-                        }
-                        val left = parts[0].toInt()
-                        val top = parts[1].toInt()
-                        val right = parts[2].toInt()
-                        val bottom = parts[3].toInt()
-
-                        val width = right - left
-                        val height = bottom - top
-
-                        val tapX = left + (width * operation.relativeX).toInt()
-                        val tapY = top + (height * operation.relativeY).toInt()
-
-                        // 4. 执行tap操作
-                        val tapTool = AITool("tap", listOf(
-                            ToolParameter("x", tapX.toString()),
-                            ToolParameter("y", tapY.toString())
-                        ))
-                        Log.d(TAG, "Executing relative click via 'tap' tool at ($tapX, $tapY)")
-                        val tapResult = toolHandler.executeTool(tapTool)
-                        if (!tapResult.success) {
-                            Log.w(TAG, "Tap operation failed: ${tapResult.error}")
-                        }
-                        return tapResult.success
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Relative click failed due to an exception while parsing bounds or executing tap.", e)
-                        return false
-                    }
-                } else {
-                    // 对于没有相对坐标的点击，保持原逻辑
-                    val params = createSelectorParams(operation.selector, state, operation)
-                    val tool = AITool("click_element", params)
-                    Log.d(TAG, "Executing tool '${tool.name}' with params: $params")
-                    val result = toolHandler.executeTool(tool)
-                    if (!result.success) {
-                        Log.w(TAG, "Click operation failed: ${result.error}")
-                    }
-                    result.success
+                val params = createSelectorParams(operation.selector, state, operation)
+                val tool = AITool("click_element", params)
+                Log.d(TAG, "Executing tool '${tool.name}' with params: $params")
+                val result = toolHandler.executeTool(tool)
+                if (!result.success) {
+                    Log.w(TAG, "Click operation failed: ${result.error}")
                 }
+                result.success
             }
             is UIOperation.Input -> {
                 val textToInput = state.variables[operation.textVariableKey] as? String ?: ""
@@ -300,9 +233,7 @@ class UIOperationExecutor(
                 val tool = AITool("start_app", listOf(ToolParameter("package_name", operation.packageName)))
                 Log.d(TAG, "Executing tool '${tool.name}' with package: ${operation.packageName}")
                 val result = toolHandler.executeTool(tool)
-                if (result.success) {
-                    delay(STARTUP_DELAY) // 等待应用启动和界面加载
-                } else {
+                if (!result.success) {
                     Log.w(TAG, "Launch app failed: ${result.error}")
                 }
                 result.success
@@ -313,15 +244,6 @@ class UIOperationExecutor(
                 val result = toolHandler.executeTool(tool)
                 if (!result.success) {
                     Log.w(TAG, "Kill app failed: ${result.error}")
-                }
-                result.success
-            }
-            is UIOperation.PressKey -> {
-                val tool = AITool("pressKey", listOf(ToolParameter("key_code", operation.keyCode)))
-                Log.d(TAG, "Executing tool '${tool.name}' with key_code: ${operation.keyCode}")
-                val result = toolHandler.executeTool(tool)
-                if (!result.success) {
-                    Log.w(TAG, "Press key failed: ${result.error}")
                 }
                 result.success
             }
@@ -336,11 +258,6 @@ class UIOperationExecutor(
                     Log.w(TAG, "Swipe operation failed: ${result.error}")
                 }
                 result.success
-            }
-            is UIOperation.Wait -> {
-                Log.d(TAG, "Waiting for ${operation.durationMs}ms")
-                delay(operation.durationMs)
-                true
             }
             is UIOperation.WaitForPage -> {
                 Log.d(TAG, "Waiting for page. Timeout: ${operation.timeoutMs}ms")
@@ -544,14 +461,6 @@ class UIOperationExecutor(
             is UISelector.ByXPath -> {
                 Log.d(TAG, "使用XPath选择器: ${selector.xpath}")
                 mutableListOf(ToolParameter("xpath", selector.xpath))
-            }
-            is UISelector.Compound -> {
-                Log.d(TAG, "处理复合选择器，操作符: ${selector.operator}")
-                val combinedParams = mutableListOf<ToolParameter>()
-                selector.selectors.forEach { subSelector ->
-                    combinedParams.addAll(createSelectorParams(subSelector, state, clickOperation))
-                }
-                return combinedParams
             }
         }
 

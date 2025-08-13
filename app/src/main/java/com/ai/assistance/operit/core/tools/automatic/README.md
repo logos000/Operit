@@ -30,7 +30,7 @@ graph TD
     subgraph "执行阶段: 动手执行"
         C -->|6. 提供参数| G
         G -->|7. 开始执行| H(UIOperationExecutor: 执行者)
-        H -->|8. 操作UI (点击, 输入, 等待)| E
+        H -->|8. 操作UI (点击,输入)| E
         E -->|9. 返回结果/新状态| H
         H -->|10. 验证是否符合预期? (例如:页面标题是否正确)| E
         H -->|11. 重复直到任务完成| H
@@ -44,7 +44,7 @@ graph TD
 
 1.  **编写“菜谱” (`UIRouteConfig`)**: 首先，我们需要告诉系统一个App能做什么。我们通过 `UIRouteConfig` 来定义：
     *   **地点 (`UINode`)**: App里的各个页面，我们用它独一无二的 `name` 来标识，如“微信主页”、“聊天列表”。
-    *   **路径 (`UIEdge`)**: 页面之间的跳转操作。这可以是一个简单的 `Click`、`Input`，或者一个新增的 `Wait` 操作来处理动态加载或动画的延迟。特别地，我们可以在这里定义一个**验证步骤**。例如，从“聊天列表”点击“张三”后，我们可以附加一个验证操作，确保新页面的标题确实是“张三”，从而保证我们进入了正确的聊天窗口。
+    *   **路径 (`UIEdge`)**: 页面之间的跳转操作。特别地，我们可以在这里定义一个**验证步骤**。例如，从“聊天列表”点击“张三”后，我们可以附加一个验证操作，确保新页面的标题确实是“张三”，从而保证我们进入了正确的聊天窗口。
     *   **功能 (`UIFunction`)**: 一个完整的、有业务价值的任务。比如“发送微信消息”这个功能，它也用自己的 `name` 作为标识，并定义了**目标地点**是“聊天窗口”，以及**后续操作**是“输入文本”和“点击发送”。
 
 2.  **大厨“规划” (`UIRouter`)**: 当您下达一个“发送微信消息”的指令时，`UIRouter` 作为大厨开始工作：
@@ -100,7 +100,6 @@ val wechatConfig = UIRouteConfig.build {
     function("发送微信消息", "chat_window") {
         operation = UIOperations.sequential(
             UIOperations.input(UISelector.ByClassName("android.widget.EditText"), "{{input_text}}"),
-            UIOperations.wait(500), // 新增Wait操作，等待0.5秒以确保UI稳定
             UIOperations.click(UISelector.ByText("发送"))
         )
     }

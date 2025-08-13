@@ -46,15 +46,7 @@ class UIRouteConfig {
      * @param toNodeName 目标节点的名称。
      */
     fun defineEdge(fromNodeName: String, toNodeName: String, operation: UIOperation, validation: UIOperation.ValidateElement? = null, conditions: Set<String> = emptySet(), weight: Double = 1.0) {
-        val edge = UIEdgeDefinition(toNodeName, listOf(operation), validation, conditions, weight)
-        edgeDefinitions.computeIfAbsent(fromNodeName) { mutableListOf() }.add(edge)
-    }
-
-    /**
-     * 定义一条支持多步操作的边。
-     */
-    fun defineEdge(fromNodeName: String, toNodeName: String, operations: List<UIOperation>, validation: UIOperation.ValidateElement? = null, conditions: Set<String> = emptySet(), weight: Double = 1.0) {
-        val edge = UIEdgeDefinition(toNodeName, operations, validation, conditions, weight)
+        val edge = UIEdgeDefinition(toNodeName, operation, validation, conditions, weight)
         edgeDefinitions.computeIfAbsent(fromNodeName) { mutableListOf() }.add(edge)
     }
 
@@ -88,23 +80,12 @@ class UIRouteConfig {
                 }
 
                 jsonConfig.edges.forEach { jsonEdge ->
-                    val operations = if (jsonEdge.operations.isNotEmpty()) {
-                        jsonEdge.operations.map { convertJsonOperation(it) }
-                    } else {
-                        // 兼容旧的单个operation字段
-                        jsonEdge.operation?.let { listOf(convertJsonOperation(it)) } ?: emptyList()
-                    }
-
-                    if (operations.isEmpty()) {
-                        Log.w(TAG, "Edge from '${jsonEdge.from}' to '${jsonEdge.to}' has no operations. Skipping.")
-                        return@forEach
-                    }
-
+                    val operation = convertJsonOperation(jsonEdge.operation)
                     val validation = jsonEdge.validation?.let { convertJsonOperation(it) as? UIOperation.ValidateElement }
 
                     val edge = UIEdgeDefinition(
                         toNodeName = jsonEdge.to,
-                        operations = operations,
+                        operation = operation,
                         validation = validation,
                         conditions = jsonEdge.conditions,
                         weight = jsonEdge.weight
@@ -148,14 +129,6 @@ class UIRouteConfig {
                     packageName = jsonOp.packageName,
                     description = jsonOp.description ?: "Launch app"
                 )
-                is JsonUIOperation.PressKey -> UIOperation.PressKey(
-                    keyCode = jsonOp.keyCode,
-                    description = jsonOp.description ?: "Press key ${jsonOp.keyCode}"
-                )
-                is JsonUIOperation.Wait -> UIOperation.Wait(
-                    durationMs = jsonOp.durationMs,
-                    description = jsonOp.description ?: "Wait for ${jsonOp.durationMs}ms"
-                )
                 is JsonUIOperation.Sequential -> UIOperation.Sequential(
                     operations = jsonOp.operations.map { convertJsonOperation(it) },
                     description = jsonOp.description ?: "Sequential operations"
@@ -171,21 +144,76 @@ class UIRouteConfig {
 
         private fun convertJsonSelector(jsonSelector: JsonUISelector): UISelector {
             return when (jsonSelector.type) {
-                "ByText" -> UISelector.ByText(jsonSelector.text ?: jsonSelector.value ?: throw IllegalArgumentException("ByText selector requires a 'text' or 'value' field."))
-                "ByResourceId" -> UISelector.ByResourceId(jsonSelector.id ?: jsonSelector.value ?: throw IllegalArgumentException("ByResourceId selector requires an 'id' or 'value' field."))
-                "ByClassName" -> UISelector.ByClassName(jsonSelector.name ?: jsonSelector.value ?: throw IllegalArgumentException("ByClassName selector requires a 'name' or 'value' field."))
-                "ByContentDescription" -> UISelector.ByContentDesc(jsonSelector.desc ?: jsonSelector.value ?: throw IllegalArgumentException("ByContentDescription selector requires a 'desc' or 'value' field."))
-                "ByBounds" -> UISelector.ByBounds(jsonSelector.bounds ?: jsonSelector.value ?: throw IllegalArgumentException("ByBounds selector requires a 'bounds' or 'value' field."))
-                "ByXPath" -> UISelector.ByXPath(jsonSelector.xpath ?: jsonSelector.value ?: throw IllegalArgumentException("ByXPath selector requires an 'xpath' or 'value' field."))
-                "Compound" -> {
-                    val selectors = jsonSelector.selectors?.map { convertJsonSelector(it) } ?: emptyList()
-                    val operator = jsonSelector.operator ?: "AND"
-                    UISelector.Compound(selectors, operator)
-                }
+                "ByText" -> UISelector.ByText(jsonSelector.value)
+                "ByResourceId" -> UISelector.ByResourceId(jsonSelector.value)
+                "ByClassName" -> UISelector.ByClassName(jsonSelector.value)
                 else -> throw IllegalArgumentException("Unknown selector type: ${jsonSelector.type}")
             }
         }
         
+        fun loadPayAppExitConfig(): UIRouteConfig {
+            Log.d(TAG, "Loading PayAppExitConfig...")
+            val jsonString = """
+                {
+                  "appName": "多线程下载器",
+                  "packageName": "com.dv.adm.downloader",
+                  "nodes": [
+                    {
+                      "name": "下载器主页",
+                      "description": "应用主界面",
+                      "nodeType": "APP_HOME"
+                    },
+                    {
+                      "name": "侧边菜单",
+                      "description": "点击左上角后展开的菜单",
+                      "nodeType": "DETAIL_PAGE"
+                    },
+                    {
+                      "name": "应用外",
+                      "description": "退出应用后的状态，例如桌面",
+                      "nodeType": "SYSTEM_PAGE"
+                    }
+                  ],
+                  "edges": [
+                    {
+                      "from": "下载器主页",
+                      "to": "侧边菜单",
+                      "operation": {
+                        "type": "Click",
+                        "description": "点击左上角菜单按钮",
+                        "selector": {
+                          "type": "ByClassName",
+                          "value": "android.view.ViewGroup"
+                        },
+                        "relativeX": 0.1,
+                        "relativeY": 0.1
+                      }
+                    },
+                    {
+                      "from": "侧边菜单",
+                      "to": "应用外",
+                      "operation": {
+                        "type": "Click",
+                        "description": "点击退出按钮",
+                        "selector": {
+                          "type": "ByText",
+                          "value": "退出"
+                        }
+                      }
+                    }
+                  ],
+                  "functions": [
+                    {
+                      "name": "退出应用",
+                      "description": "从应用主页到完全退出",
+                      "targetNodeName": "应用外",
+                      "operation": null
+                    }
+                  ]
+                }
+            """.trimIndent()
+            return loadFromJson(jsonString)
+        }
     }
 }
 
@@ -214,7 +242,7 @@ enum class UINodeType {
  */
 data class UIEdgeDefinition(
     val toNodeName: String,
-    val operations: List<UIOperation>, // 支持多步操作
+    val operation: UIOperation,
     val validation: UIOperation.ValidateElement? = null,
     val conditions: Set<String>,
     val weight: Double
