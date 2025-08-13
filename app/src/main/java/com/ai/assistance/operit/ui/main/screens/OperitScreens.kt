@@ -368,7 +368,7 @@ sealed class Screen(
     }
 
     data object UserPreferencesSettings :
-            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = "用户偏好设置") {
+            Screen(parentScreen = Settings, navItem = NavItem.Settings, titleRes = "AI角色卡配置") {
         @Composable
         override fun Content(
                 navController: NavController,
@@ -382,9 +382,7 @@ sealed class Screen(
         ) {
             UserPreferencesSettingsScreen(
                     onNavigateBack = onGoBack,
-                    onNavigateToGuide = { profileId, category ->
-                        navigateTo(UserPreferencesGuide(profileId, category))
-                    }
+                    onNavigateToGuide = { _, _ -> }
             )
         }
     }
@@ -501,7 +499,8 @@ sealed class Screen(
                         ModelPromptsSettingsScreen(
                             onBackPressed = onGoBack,
                     onNavigateToFunctionalPrompts = { navigateTo(FunctionalPromptConfig) },
-                    onNavigateToMarket = { navigateTo(PromptMarket) }
+                    onNavigateToMarket = { navigateTo(PromptMarket) },
+                    onNavigateToPersonaGenerator = { navigateTo(UserPreferencesSettings) }
                             )
                         }
                     }

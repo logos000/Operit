@@ -52,7 +52,6 @@ fun AssistantConfigScreen(
         val functionalConfigManager = remember { FunctionalConfigManager(context) }
         val modelConfigManager = remember { ModelConfigManager(context) }
         val promptPreferences = remember { PromptPreferencesManager(context) }
-        val userPrefsManager = remember { UserPreferencesManager(context) }
 
         // 启动文件选择器
         val zipFileLauncher =
@@ -84,14 +83,7 @@ fun AssistantConfigScreen(
         // State for the selected function type
         var selectedFunctionType by remember { mutableStateOf(PromptFunctionType.CHAT) }
 
-        // 获取当前活跃的用户偏好/性格配置
-        val activeUserPrefProfileId by
-                userPrefsManager.activeProfileIdFlow.collectAsState(initial = "default")
-        val activeUserPrefProfile by
-                userPrefsManager
-                        .getUserPreferencesFlow(activeUserPrefProfileId)
-                        .collectAsState(initial = null)
-        val activeUserPrefProfileName = activeUserPrefProfile?.name ?: stringResource(R.string.processing)
+        // 已移除：用户偏好入口
 
         // 根据所选功能获取数据
         val promptProfileId by
@@ -312,23 +304,26 @@ fun AssistantConfigScreen(
                                                         }
                                                 }
 
-                                                Divider(
-                                                        modifier = Modifier.padding(vertical = 4.dp)
-                                                )
+                                                								Divider(
+										modifier = Modifier.padding(vertical = 4.dp)
+								)
 
-                                                SettingItem(
-                                                        icon = Icons.Default.Face,
-                                                        title = stringResource(R.string.user_personality),
-                                                        value = activeUserPrefProfileName,
-                                                        onClick = navigateToUserPreferences
-                                                )
+								// 已移除：AI人设卡生成器入口
 
-                                                SettingItem(
-                                                        icon = Icons.Default.Message,
-                                                        title = stringResource(R.string.function_prompt),
-                                                        value = promptProfile?.name ?: stringResource(R.string.not_configured),
-                                                        onClick = navigateToFunctionalPrompts
-                                                )
+								// 提示词配置入口（跳转至模型提示词设置）
+								SettingItem(
+										icon = Icons.Default.Description,
+										title = stringResource(R.string.settings_prompt_title),
+										value = stringResource(R.string.settings_configure_prompt),
+										onClick = navigateToModelPrompts
+								)
+
+								SettingItem(
+										icon = Icons.Default.Message,
+										title = stringResource(R.string.function_prompt),
+										value = promptProfile?.name ?: stringResource(R.string.not_configured),
+										onClick = navigateToFunctionalPrompts
+								)
 
                                                 SettingItem(
                                                         icon = Icons.Default.Api,

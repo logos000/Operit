@@ -23,6 +23,7 @@ import com.ai.assistance.operit.data.preferences.initAndroidPermissionPreference
 import com.ai.assistance.operit.data.preferences.initUserPreferencesManager
 import com.ai.assistance.operit.data.preferences.preferencesManager
 import com.ai.assistance.operit.services.EmbeddingService
+import com.ai.assistance.operit.core.tools.initPersonaKV
 import com.ai.assistance.operit.ui.features.chat.webview.LocalWebServer
 import com.ai.assistance.operit.ui.features.chat.webview.computer.ComputerDesktopManager
 import com.ai.assistance.operit.ui.features.chat.webview.workspace.editor.language.LanguageFactory
@@ -98,6 +99,10 @@ class OperitApplication : Application() {
 
         // 初始化用户偏好管理器
         initUserPreferencesManager(applicationContext)
+
+        		// 初始化人设KV持久化上下文
+		initPersonaKV(this)
+		// 默认人设的初始化逻辑已移动至 UserPreferencesSettingsScreen
 
         // 初始化Android权限偏好管理器
         initAndroidPermissionPreferences(applicationContext)

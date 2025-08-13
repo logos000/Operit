@@ -37,12 +37,7 @@ sealed class NavItem(val route: String, val titleResId: Int, val icon: ImageVect
                         R.string.user_preferences_guide,
                         Icons.Default.Person
                 )
-        object UserPreferencesSettings :
-                NavItem(
-                        "user_preferences_settings",
-                        R.string.user_preferences_settings,
-                        Icons.Default.Face
-                )
+        // 移除：用户偏好设置导航项
         object ChatHistorySettings :
                 NavItem(
                         "chat_history_settings",

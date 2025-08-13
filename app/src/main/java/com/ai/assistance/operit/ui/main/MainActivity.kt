@@ -456,11 +456,7 @@ class MainActivity : ComponentActivity() {
                         else {
                             // 主应用界面 (始终存在于底层)
                             OperitApp(
-                                    initialNavItem =
-                                            when {
-                                                showPreferencesGuide -> NavItem.UserPreferencesGuide
-                                                else -> NavItem.AiChat
-                                            },
+                                    initialNavItem = NavItem.AiChat,
                                     toolHandler = toolHandler
                             )
                         }

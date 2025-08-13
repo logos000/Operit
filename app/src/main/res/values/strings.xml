@@ -837,7 +837,7 @@
     <string name="save_prompts">保存提示词</string>
     <string name="about_system_prompts">关于系统提示词</string>
     <string name="system_prompts_desc">系统提示词用于定义AI助手的行为和风格：</string>
-    <string name="intro_prompt_desc">定义AI的身份和能力范围</string>
+    <string name="intro_prompt_desc">将身份设定与语气风格合并成一段提示词，更易于维护和复用。</string>
     <string name="tone_prompt_desc">设置AI回复的语气和表达方式</string>
     <string name="prompt_tip">提示：有效的系统提示词能让AI助手更好地符合您的期望，但过长的提示词可能会消耗更多Token。</string>
     <string name="prompts_saved">提示词已保存</string>
@@ -955,4 +955,10 @@
     <string name="theme_background_blur">背景模糊</string>
     <string name="theme_background_blur_desc">为背景图片或视频添加高斯模糊效果</string>
     <string name="theme_background_blur_radius">模糊半径</string>
+
+    <string name="custom_prompt_suffix_title">自定义提示词后缀</string>
+    <string name="custom_prompt_suffix_hint">请输入后缀内容（可选）</string>
+    <string name="custom_prompt_suffix_placeholder">例如：请在回答最后给出一个一句话总结。</string>
+    <string name="current_suffix_config">当前提示词后缀配置: %1$s</string>
+    <string name="select_suffix_config_title">选择后缀配置</string>
 </resources>

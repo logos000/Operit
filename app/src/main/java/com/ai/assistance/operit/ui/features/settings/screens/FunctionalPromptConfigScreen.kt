@@ -24,6 +24,7 @@ import com.ai.assistance.operit.data.model.PromptProfile
 import com.ai.assistance.operit.data.preferences.FunctionalPromptManager
 import com.ai.assistance.operit.data.preferences.PromptFunctionType
 import com.ai.assistance.operit.data.preferences.PromptPreferencesManager
+import com.ai.assistance.operit.data.preferences.PromptSuffixPreferencesManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -39,10 +40,15 @@ fun FunctionalPromptConfigScreen(
         // 配置管理器
         val functionalPromptManager = remember { FunctionalPromptManager(context) }
         val promptPreferencesManager = remember { PromptPreferencesManager(context) }
+        val suffixPreferencesManager = remember { PromptSuffixPreferencesManager(context) }
 
         // 配置映射状态
         val promptMapping =
                 functionalPromptManager.functionPromptMappingFlow.collectAsState(
+                        initial = emptyMap()
+                )
+        val suffixMapping =
+                functionalPromptManager.functionSuffixMappingFlow.collectAsState(
                         initial = emptyMap()
                 )
 
@@ -50,16 +56,19 @@ fun FunctionalPromptConfigScreen(
         val profileList =
                 promptPreferencesManager.profileListFlow.collectAsState(initial = listOf("default"))
                         .value
+        // 后缀列表
+        val suffixList = suffixPreferencesManager.profileListFlow.collectAsState(initial = listOf("default")).value
 
         // 配置摘要列表
         var promptProfiles by remember { mutableStateOf<List<PromptProfile>>(emptyList()) }
+        var suffixNameMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
 
         // UI状态
         var isLoading by remember { mutableStateOf(true) }
         var showSaveSuccess by remember { mutableStateOf(false) }
 
         // 加载提示词配置信息
-        LaunchedEffect(profileList) {
+        LaunchedEffect(profileList, suffixList) {
                 isLoading = true
                 val profiles = mutableListOf<PromptProfile>()
                 for (profileId in profileList) {
@@ -67,7 +76,14 @@ fun FunctionalPromptConfigScreen(
                                 promptPreferencesManager.getPromptProfileFlow(profileId).first()
                         profiles.add(profile)
                 }
+                // 读取后缀名称
+                val suffixNames = mutableMapOf<String, String>()
+                for (sid in suffixList) {
+                        val sp = suffixPreferencesManager.getSuffixProfileFlow(sid).first()
+                        suffixNames[sid] = sp.name
+                }
                 promptProfiles = profiles
+                suffixNameMap = suffixNames
                 isLoading = false
         }
 
@@ -216,10 +232,15 @@ fun FunctionalPromptConfigScreen(
                                         val currentProfile =
                                                 promptProfiles.find { it.id == currentProfileId }
 
+                                        val currentSuffixId = suffixMapping.value[functionType] ?: "default"
+
                                         FunctionPromptCard(
                                                 functionType = functionType,
                                                 currentProfile = currentProfile,
                                                 availableProfiles = promptProfiles,
+                                                currentSuffixId = currentSuffixId,
+                                                suffixList = suffixList,
+                                                suffixNameResolver = { id -> suffixNameMap[id] ?: "默认后缀" },
                                                 onProfileSelected = { profileId ->
                                                         scope.launch {
                                                                 functionalPromptManager
@@ -227,6 +248,12 @@ fun FunctionalPromptConfigScreen(
                                                                                 functionType,
                                                                                 profileId
                                                                         )
+                                                                showSaveSuccess = true
+                                                        }
+                                                },
+                                                onSuffixSelected = { sid ->
+                                                        scope.launch {
+                                                                functionalPromptManager.setSuffixProfileForFunction(functionType, sid)
                                                                 showSaveSuccess = true
                                                         }
                                                 }
@@ -283,8 +310,7 @@ fun FunctionalPromptConfigScreen(
                                                 ) {
                                                         Row(
                                                                 modifier = Modifier.padding(16.dp),
-                                                                verticalAlignment =
-                                                                        Alignment.CenterVertically
+                                                                verticalAlignment = Alignment.CenterVertically
                                                         ) {
                                                                 Icon(
                                                                         imageVector =
@@ -326,9 +352,14 @@ fun FunctionPromptCard(
         functionType: PromptFunctionType,
         currentProfile: PromptProfile?,
         availableProfiles: List<PromptProfile>,
-        onProfileSelected: (String) -> Unit
+        currentSuffixId: String,
+        suffixList: List<String>,
+        suffixNameResolver: (String) -> String,
+        onProfileSelected: (String) -> Unit,
+        onSuffixSelected: (String) -> Unit
 ) {
         var expanded by remember { mutableStateOf(false) }
+        var suffixExpanded by remember { mutableStateOf(false) }
         val context = LocalContext.current
 
         Card(
@@ -418,6 +449,32 @@ fun FunctionPromptCard(
                                                         tint =
                                                                 MaterialTheme.colorScheme
                                                                         .onSurfaceVariant
+                                                )
+                                        }
+                                }
+
+                                Spacer(Modifier.height(6.dp))
+
+                                // 当前后缀配置
+                                Surface(
+                                        modifier = Modifier.fillMaxWidth().clickable { suffixExpanded = !suffixExpanded },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                ) {
+                                        Row(
+                                                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                                Text(
+                                                        text = stringResource(R.string.current_suffix_config, suffixNameResolver(currentSuffixId)),
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Medium
+                                                )
+                                                Icon(
+                                                        imageVector = if (suffixExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                        contentDescription = stringResource(R.string.expand),
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                         }
                                 }
@@ -566,6 +623,44 @@ fun FunctionPromptCard(
                                         }
 
                                         Spacer(modifier = Modifier.height(8.dp))
+                                }
+                        }
+
+                        // 后缀列表
+                        AnimatedVisibility(visible = suffixExpanded) {
+                                Column(
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                ) {
+                                        Text(
+                                                text = stringResource(R.string.select_suffix_config_title),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Medium,
+                                                modifier = Modifier.padding(bottom = 8.dp)
+                                        )
+                                        suffixList.forEach { sid ->
+                                                val name = suffixNameResolver(sid)
+                                                val isSelected = sid == currentSuffixId
+                                                Surface(
+                                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
+                                                        onSuffixSelected(sid)
+                                                        suffixExpanded = false
+                                                    },
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                                    border = BorderStroke(if (isSelected) 0.dp else 0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        if (isSelected) {
+                                                            Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                                            Spacer(Modifier.width(8.dp))
+                                                        }
+                                                        Text(name, style = MaterialTheme.typography.bodyMedium)
+                                                    }
+                                                }
+                                        }
                                 }
                         }
 

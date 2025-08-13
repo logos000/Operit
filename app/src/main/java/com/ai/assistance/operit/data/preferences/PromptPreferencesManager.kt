@@ -185,6 +185,9 @@ class PromptPreferencesManager(private val context: Context) {
                 setupDefaultProfile(preferences, DEFAULT_VOICE_PROFILE_ID, "默认语音提示词", defaultVoiceIntroPrompt, defaultVoiceTonePrompt)
                 setupDefaultProfile(preferences, DEFAULT_DESKTOP_PET_PROFILE_ID, "默认桌宠提示词", defaultDesktopPetIntroPrompt, defaultDesktopPetTonePrompt)
 
+                // 合并：安装时将各配置的 tone 合并入 intro 并落盘
+                mergeToneIntoIntroForAll(preferences, defaultProfiles)
+
             } else {
                 // --- Migration for existing users ---
                 var listModified = false
@@ -205,6 +208,9 @@ class PromptPreferencesManager(private val context: Context) {
                 if (listModified) {
                     preferences[profileListKey] = currentList
                 }
+
+                // 合并：迁移时将所有已存在配置的 tone 合并入 intro 并落盘
+                mergeToneIntoIntroForAll(preferences, preferences[profileListKey] ?: emptySet())
             }
         }
     }
@@ -222,5 +228,22 @@ class PromptPreferencesManager(private val context: Context) {
         preferences[profileIntroPromptKey(id)] = introPrompt
         preferences[profileTonePromptKey(id)] = tonePrompt
         preferences[profileIsDefaultKey(id)] = isDefault
+    }
+
+    // Helper: merge tone into intro for all given profile ids
+    private fun mergeToneIntoIntroForAll(
+        preferences: MutablePreferences,
+        profileIds: Set<String>
+    ) {
+        profileIds.forEach { id ->
+            val intro = preferences[profileIntroPromptKey(id)] ?: ""
+            val tone = preferences[profileTonePromptKey(id)] ?: ""
+            if (tone.trim().isNotEmpty()) {
+                val merged = if (intro.isNotBlank()) intro + "\n\n" + tone else tone
+                preferences[profileIntroPromptKey(id)] = merged
+                // 置为单空格，保持UI逻辑一致（视为无tone）
+                preferences[profileTonePromptKey(id)] = " "
+            }
+        }
     }
 } 

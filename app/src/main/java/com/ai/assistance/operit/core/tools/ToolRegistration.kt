@@ -4,6 +4,7 @@ import android.content.Context
 import com.ai.assistance.operit.core.tools.defaultTool.ToolGetter
 import com.ai.assistance.operit.data.model.AITool
 import com.ai.assistance.operit.data.model.ToolResult
+import com.ai.assistance.operit.data.model.ToolValidationResult
 import com.ai.assistance.operit.ui.permissions.ToolCategory
 import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.flow.toList
@@ -12,11 +13,102 @@ import org.json.JSONArray
 import com.ai.assistance.operit.api.chat.EnhancedAIService
 import com.google.gson.Gson
 import kotlinx.coroutines.flow.map
+import java.util.concurrent.ConcurrentHashMap
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import androidx.datastore.preferences.core.edit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking as runBlockingKt
 
-/**
- * This file contains all tool registrations centralized for easier maintenance and integration It
- * extracts the registerTools logic from AIToolHandler into a dedicated file
- */
+// 为 DataStore 提供扩展
+private val Context.personaDataStore by preferencesDataStore(name = "persona_kv")
+
+// ===== 人设卡内存存储（按Profile隔离，带持久化） =====
+private object PersonaKVStore {
+    private val allowed = setOf(
+        "角色名称",
+        "基础设定",
+        "外貌特征", "性格与爱好", "背景故事", "说话风格"
+    )
+
+    private val profiles: ConcurrentHashMap<String, ConcurrentHashMap<String, String>> = ConcurrentHashMap()
+    @Volatile private var currentProfileId: String = "default"
+    @Volatile private var appContext: Context? = null
+
+    fun init(context: Context) {
+        appContext = context.applicationContext
+        // 预加载当前活跃ID的持久化数据（默认default）
+        loadFromStore(currentProfileId)
+    }
+
+    fun setActiveProfile(profileId: String) {
+        currentProfileId = profileId
+        ensureProfile(profileId)
+        loadFromStore(profileId)
+    }
+
+    private fun ensureProfile(profileId: String): ConcurrentHashMap<String, String> {
+        return profiles.getOrPut(profileId) {
+            ConcurrentHashMap(
+                mapOf(
+                    "角色名称" to "",
+                    "基础设定" to "",
+                    "外貌特征" to "",
+                    "性格与爱好" to "",
+                    "背景故事" to "",
+                    "说话风格" to ""
+                )
+            )
+        }
+    }
+
+    fun save(section: String, content: String) {
+        if (section !in allowed) return
+        val map = ensureProfile(currentProfileId)
+        map[section] = content
+        persistCurrentProfile()
+    }
+
+    fun toJson(): String {
+        val map = ensureProfile(currentProfileId)
+        val ordered = linkedMapOf<String, String>()
+        allowed.forEach { key -> ordered[key] = map[key] ?: "" }
+        return Gson().toJson(ordered)
+    }
+
+    private fun persistCurrentProfile() {
+        val context = appContext ?: return
+        val key = stringPreferencesKey("persona_kv_${currentProfileId}")
+        val json = toJson()
+        CoroutineScope(Dispatchers.IO).launch {
+            context.personaDataStore.edit { prefs -> prefs[key] = json }
+        }
+    }
+
+    private fun loadFromStore(profileId: String) {
+        val context = appContext ?: return
+        val key = stringPreferencesKey("persona_kv_${profileId}")
+        runBlockingKt {
+            val json = context.personaDataStore.data.first()[key]
+            if (!json.isNullOrBlank()) {
+                val obj = try { org.json.JSONObject(json) } catch (_: Exception) { null }
+                if (obj != null) {
+                    val target = ensureProfile(profileId)
+                    allowed.forEach { k -> target[k] = obj.optString(k, target[k] ?: "") }
+                }
+            }
+        }
+    }
+}
+
+// 提供公开访问：初始化/获取/设置/切换
+fun initPersonaKV(context: Context) = PersonaKVStore.init(context)
+fun getPersonaKVJson(): String = PersonaKVStore.toJson()
+fun setPersonaKV(section: String, content: String) = PersonaKVStore.save(section, content)
+fun setActivePersonaProfile(profileId: String) = PersonaKVStore.setActiveProfile(profileId)
 
 /**
  * Register all available tools with the AIToolHandler
@@ -24,6 +116,56 @@ import kotlinx.coroutines.flow.map
  * @param context Application context for tools that need it
  */
 fun registerAllTools(handler: AIToolHandler, context: Context) {
+    // 初始化持久化上下文
+    PersonaKVStore.init(context)
+    // ===== 新增：保存人设信息的工具 =====
+    handler.registerTool(
+        name = "save_persona_info",
+        category = ToolCategory.FILE_WRITE,
+        descriptionGenerator = { tool ->
+            val section = tool.parameters.find { it.name == "section" }?.value ?: ""
+            "保存人设信息到内存：$section"
+        },
+        executor = object : ToolExecutor {
+            override fun validateParameters(tool: AITool): ToolValidationResult {
+                val section = tool.parameters.find { it.name == "section" }?.value
+                val content = tool.parameters.find { it.name == "content" }?.value
+                val allowed = setOf(
+                    "角色名称",
+                    "基础设定",
+                    "外貌特征", "性格与爱好", "背景故事", "说话风格"
+                )
+                if (section.isNullOrBlank() || content.isNullOrBlank()) {
+                    return ToolValidationResult(valid = false, errorMessage = "参数 section 与 content 不能为空")
+                }
+                if (section !in allowed) {
+                    return ToolValidationResult(valid = false, errorMessage = "非法的section: $section，应为 ${allowed.joinToString("/")}")
+                }
+                return ToolValidationResult(valid = true)
+            }
+
+            override fun invoke(tool: AITool): ToolResult {
+                return try {
+                    val section = tool.parameters.first { it.name == "section" }.value
+                    val content = tool.parameters.first { it.name == "content" }.value
+                    PersonaKVStore.save(section, content)
+                    ToolResult(
+                        toolName = tool.name,
+                        success = true,
+                        result = StringResultData(PersonaKVStore.toJson()),
+                        error = null
+                    )
+                } catch (e: Exception) {
+                    ToolResult(
+                        toolName = tool.name,
+                        success = false,
+                        result = StringResultData(""),
+                        error = e.message ?: "save_persona_info 执行失败"
+                    )
+                }
+            }
+        }
+    )
 
 
     // 不在提示词加入的工具
@@ -88,6 +230,17 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
                 val packageName = tool.parameters.find { it.name == "package_name" }?.value ?: ""
                 val result = handler.getOrCreatePackageManager().usePackage(packageName)
                 ToolResult(toolName = tool.name, success = true, result = StringResultData(result))
+            }
+    )
+
+    // 便捷：启用表情包工具（激活内置包 emoji_sender）
+    handler.registerTool(
+            name = "enable_emoji_sender",
+            category = ToolCategory.FILE_READ,
+            descriptionGenerator = { _ -> "启用内置表情包工具（emoji_sender）" },
+            executor = { _ ->
+                val result = handler.getOrCreatePackageManager().usePackage("emoji_sender")
+                ToolResult(toolName = "enable_emoji_sender", success = true, result = StringResultData(result))
             }
     )
 

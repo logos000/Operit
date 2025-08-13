@@ -118,13 +118,6 @@ fun SettingsScreen(
                         containerColor = cardContainerColor
                 ) {
                         CompactSettingsItem(
-                                title = stringResource(id = R.string.settings_user_preferences),
-                                subtitle = "个人偏好和行为设置",
-                                icon = Icons.Default.Face,
-                                onClick = onNavigateToUserPreferences
-                        )
-                        
-                        CompactSettingsItem(
                                 title = stringResource(R.string.language_settings),
                                 subtitle = "界面语言切换",
                                 icon = Icons.Default.Language,
@@ -192,6 +185,14 @@ fun SettingsScreen(
                                 subtitle = "功能专用提示词模板",
                                 icon = Icons.Default.Settings,
                                 onClick = navigateToFunctionalPrompts
+                        )
+
+                        // 新增：AI角色卡生成入口
+                        CompactSettingsItem(
+                                title = "AI角色卡生成",
+                                subtitle = "AI辅助创建个性化人设卡",
+                                icon = Icons.Default.Face,
+                                onClick = onNavigateToUserPreferences
                         )
                 }
 
