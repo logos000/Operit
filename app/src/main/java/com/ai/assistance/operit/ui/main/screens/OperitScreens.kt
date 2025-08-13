@@ -1,8 +1,14 @@
 package com.ai.assistance.operit.ui.main.screens
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.ai.assistance.operit.ui.common.NavItem
@@ -29,7 +35,6 @@ import com.ai.assistance.operit.ui.features.settings.screens.UserPreferencesSett
 import com.ai.assistance.operit.ui.features.settings.screens.CustomHeadersSettingsScreen
 import com.ai.assistance.operit.ui.features.token.TokenConfigWebViewScreen
 import com.ai.assistance.operit.ui.features.toolbox.screens.AppPermissionsToolScreen
-import com.ai.assistance.operit.ui.features.toolbox.screens.AutomationToolScreen
 import com.ai.assistance.operit.ui.features.toolbox.screens.FileManagerToolScreen
 import com.ai.assistance.operit.ui.features.toolbox.screens.FormatConverterToolScreen
 import com.ai.assistance.operit.ui.features.toolbox.screens.LogcatToolScreen
@@ -166,7 +171,6 @@ sealed class Screen(
                     onTextToSpeechSelected = { navigateTo(TextToSpeech) },
                     onSpeechToTextSelected = { navigateTo(SpeechToText) },
                     onToolTesterSelected = { navigateTo(ToolTester) },
-                    onAutomationToolSelected = { navigateTo(AutomationTool) },
                     onAgreementSelected = { navigateTo(Agreement) }
             )
         }
@@ -801,24 +805,6 @@ sealed class Screen(
                 onGestureConsumed: (Boolean) -> Unit
         ) {
             SpeechToTextToolScreen(navController = navController)
-        }
-    }
-
-    // 添加自动化工具屏幕
-    data object AutomationTool :
-            Screen(parentScreen = Toolbox, navItem = NavItem.Toolbox, titleRes = "自动化工具") {
-        @Composable
-        override fun Content(
-                navController: NavController,
-                navigateTo: ScreenNavigationHandler,
-                updateNavItem: NavItemChangeHandler,
-                onGoBack: () -> Unit,
-                hasBackgroundImage: Boolean,
-                onLoading: (Boolean) -> Unit,
-                onError: (String) -> Unit,
-                onGestureConsumed: (Boolean) -> Unit
-        ) {
-            AutomationToolScreen(navController = navController)
         }
     }
 

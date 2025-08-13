@@ -77,8 +77,7 @@ fun ToolboxScreen(
         onTextToSpeechSelected: () -> Unit,
         onSpeechToTextSelected: () -> Unit,
         onToolTesterSelected: () -> Unit,
-        onAgreementSelected: () -> Unit,
-        onAutomationToolSelected: () -> Unit
+        onAgreementSelected: () -> Unit
 ) {
         // 屏幕配置信息，用于响应式布局
         val configuration = LocalConfiguration.current
@@ -103,13 +102,6 @@ fun ToolboxScreen(
                                 description = "测试AI工具的可用性和功能状态",
                                 category = ToolCategory.DEVELOPMENT,
                                 onClick = onToolTesterSelected
-                        ),
-                        Tool(
-                                name = "UI自动化工具",
-                                icon = Icons.Default.AutoAwesome,
-                                description = "一键触发预定义的UI自动化流程，支持跨应用操作",
-                                category = ToolCategory.DEVELOPMENT,
-                                onClick = onAutomationToolSelected
                         ),
                         Tool(
                                 name = "万能格式转换",
@@ -548,17 +540,6 @@ fun ToolTesterToolScreen(navController: NavController) {
                 Box(modifier = Modifier.padding(paddingValues)) {
                         com.ai.assistance.operit.ui.features.toolbox.screens.tooltester
                                 .ToolTesterScreen(navController = navController)
-                }
-        }
-}
-
-/** 显示UI自动化工具屏幕 */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun AutomationToolToolScreen(navController: NavController) {
-        Scaffold() { paddingValues ->
-                Box(modifier = Modifier.padding(paddingValues)) {
-                        AutomationToolScreen(navController = navController)
                 }
         }
 }

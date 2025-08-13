@@ -112,32 +112,32 @@ fun PackageManagerScreen() {
                             // 根据当前选中的标签页处理不同类型的文件
                             when (selectedTab) {
                                 PackageTab.PACKAGES -> {
-                                    if (!fileName!!.endsWith(".js")) {
+                            if (!fileName!!.endsWith(".js")) {
                                         snackbarHostState.showSnackbar(message = "包管理只支持.js文件")
-                                        return@launch
-                                    }
+                                return@launch
+                            }
 
-                                    // Copy the file to a temporary location
-                                    val inputStream = context.contentResolver.openInputStream(uri)
-                                    val tempFile = File(context.cacheDir, fileName)
+                            // Copy the file to a temporary location
+                            val inputStream = context.contentResolver.openInputStream(uri)
+                            val tempFile = File(context.cacheDir, fileName)
 
-                                    inputStream?.use { input ->
-                                        tempFile.outputStream().use { output -> input.copyTo(output) }
-                                    }
+                            inputStream?.use { input ->
+                                tempFile.outputStream().use { output -> input.copyTo(output) }
+                            }
 
-                                    // Import the package from the temporary file
-                                    packageManager.importPackageFromExternalStorage(
-                                            tempFile.absolutePath
-                                    )
+                            // Import the package from the temporary file
+                            packageManager.importPackageFromExternalStorage(
+                                    tempFile.absolutePath
+                            )
 
-                                    // Refresh the lists
-                                    availablePackages.value = packageManager.getAvailablePackages()
-                                    importedPackages.value = packageManager.getImportedPackages()
+                            // Refresh the lists
+                            availablePackages.value = packageManager.getAvailablePackages()
+                            importedPackages.value = packageManager.getImportedPackages()
 
-                                    snackbarHostState.showSnackbar(message = "外部包导入成功")
+                            snackbarHostState.showSnackbar(message = "外部包导入成功")
 
-                                    // Clean up the temporary file
-                                    tempFile.delete()
+                            // Clean up the temporary file
+                            tempFile.delete()
                                 }
                                 PackageTab.AUTOMATION_CONFIGS -> {
                                     if (!fileName!!.endsWith(".json")) {
@@ -183,7 +183,7 @@ fun PackageManagerScreen() {
     val uiRouter = remember {
         val toolHandler = AIToolHandler.getInstance(context)
         UIRouter(context, toolHandler)
-    }
+            }
 
     // Load packages
     LaunchedEffect(Unit) {
@@ -268,29 +268,29 @@ fun PackageManagerScreen() {
                         onClick = { selectedTab = PackageTab.PACKAGES },
                         modifier = Modifier.height(48.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Extension,
-                            contentDescription = null,
+                            Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                        imageVector = Icons.Default.Extension,
+                                        contentDescription = null,
                             modifier = Modifier.size(16.dp),
                             tint = if (selectedTab == PackageTab.PACKAGES) 
                                 MaterialTheme.colorScheme.primary 
                             else 
                                 MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                                )
                         Spacer(Modifier.width(6.dp))
-                        Text(
-                            "包管理",
+                                Text(
+                                        "包管理",
                             style = MaterialTheme.typography.bodySmall,
                             softWrap = false,
                             color = if (selectedTab == PackageTab.PACKAGES) 
                                 MaterialTheme.colorScheme.primary 
                             else 
                                 MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                )
                     }
                 }
 
@@ -300,21 +300,21 @@ fun PackageManagerScreen() {
                     onClick = { selectedTab = PackageTab.AUTOMATION_CONFIGS },
                     modifier = Modifier.height(48.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
+                            Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
                             imageVector = Icons.Default.Build,
-                            contentDescription = null,
+                                        contentDescription = null,
                             modifier = Modifier.size(16.dp),
                             tint = if (selectedTab == PackageTab.AUTOMATION_CONFIGS) 
                                 MaterialTheme.colorScheme.primary 
                             else 
                                 MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                                )
                         Spacer(Modifier.width(6.dp))
-                        Text(
+                                Text(
                             "自动化配置",
                             style = MaterialTheme.typography.bodySmall,
                             softWrap = false,
@@ -322,7 +322,7 @@ fun PackageManagerScreen() {
                                 MaterialTheme.colorScheme.primary 
                             else 
                                 MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                )
                     }
                 }
 
@@ -332,21 +332,21 @@ fun PackageManagerScreen() {
                         onClick = { selectedTab = PackageTab.MCP },
                         modifier = Modifier.height(48.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
+                            Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
                             imageVector = Icons.Default.Cloud,
-                            contentDescription = null,
+                                        contentDescription = null,
                             modifier = Modifier.size(16.dp),
                             tint = if (selectedTab == PackageTab.MCP) 
                                 MaterialTheme.colorScheme.primary 
                             else 
                                 MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                                )
                         Spacer(Modifier.width(6.dp))
-                        Text(
+                                Text(
                             "MCP",
                             style = MaterialTheme.typography.bodySmall,
                             softWrap = false,
@@ -354,8 +354,8 @@ fun PackageManagerScreen() {
                                 MaterialTheme.colorScheme.primary 
                             else 
                                 MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                )
+            }
                 }
             }
 
@@ -508,12 +508,12 @@ fun PackageManagerScreen() {
                             // MCP子内容
                             when (selectedMCPSubTab) {
                                 MCPSubTab.MARKETPLACE -> {
-                                    // MCP插件市场界面
-                                    MCPScreen(mcpRepository = mcpRepository)
-                                }
+                        // MCP插件市场界面
+                        MCPScreen(mcpRepository = mcpRepository)
+                    }
                                 MCPSubTab.CONFIG -> {
-                                    // MCP配置界面
-                                    MCPConfigScreen()
+                        // MCP配置界面
+                        MCPConfigScreen()
                                 }
                             }
                         }

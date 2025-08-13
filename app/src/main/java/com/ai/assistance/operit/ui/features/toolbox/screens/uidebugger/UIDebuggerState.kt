@@ -10,7 +10,23 @@ data class UIDebuggerState(
         val errorMessage: String? = null,
         val showActionFeedback: Boolean = false,
         val actionFeedbackMessage: String = "",
-        val highlightEnabled: Boolean = false
+        val highlightEnabled: Boolean = false,
+        // 导入导出相关状态
+        val showImportDialog: Boolean = false,
+        val showExportDialog: Boolean = false,
+        val isExporting: Boolean = false,
+        val isImporting: Boolean = false,
+        val importExportMessage: String? = null,
+        val availableConfigs: List<ImportableConfig> = emptyList()
+)
+
+/** 可导入的配置信息 */
+data class ImportableConfig(
+    val appName: String,
+    val packageName: String,
+    val description: String,
+    val fileName: String,
+    val isBuiltIn: Boolean
 )
 
 /** UI元素数据模型 */

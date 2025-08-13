@@ -25,54 +25,54 @@ fun PackageItem(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        )
-    ) {
-        Row(
+                        )
+        ) {
+                Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
-        ) {
+                ) {
             // 图标
-            Icon(
-                imageVector = Icons.Default.Extension,
-                contentDescription = null,
+                                        Icon(
+                                                imageVector = Icons.Default.Extension,
+                                                contentDescription = null,
                 modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
+                                                tint = MaterialTheme.colorScheme.primary
+                                        )
             
             Spacer(modifier = Modifier.width(8.dp))
-            
+
             // 文本内容 - 添加右侧边距防止撞到开关
-            Column(
+                        Column(
                 modifier = Modifier
                     .weight(1f)
                     .padding(end = 8.dp)
-            ) {
-                Text(
-                    text = name,
+                        ) {
+                                Text(
+                                        text = name,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Text(
+                                        text = description,
+                                        style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
-                )
-            }
-            
+                                )
+                        }
+
             // 开关
-            Switch(
-                checked = isImported,
-                onCheckedChange = onToggleImport,
+                        Switch(
+                                checked = isImported,
+                                onCheckedChange = onToggleImport,
                 modifier = Modifier.size(width = 32.dp, height = 20.dp),
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = MaterialTheme.colorScheme.primary,
                     checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
                     uncheckedThumbColor = MaterialTheme.colorScheme.outline,
                     uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            )
+                                        )
+                        )
+                }
         }
-    }
 }

@@ -261,14 +261,14 @@ class UIOperationExecutor(
                     }
                 } else {
                     // 对于没有相对坐标的点击，保持原逻辑
-                    val params = createSelectorParams(operation.selector, state, operation)
-                    val tool = AITool("click_element", params)
-                    Log.d(TAG, "Executing tool '${tool.name}' with params: $params")
-                    val result = toolHandler.executeTool(tool)
-                    if (!result.success) {
-                        Log.w(TAG, "Click operation failed: ${result.error}")
-                    }
-                    result.success
+                val params = createSelectorParams(operation.selector, state, operation)
+                val tool = AITool("click_element", params)
+                Log.d(TAG, "Executing tool '${tool.name}' with params: $params")
+                val result = toolHandler.executeTool(tool)
+                if (!result.success) {
+                    Log.w(TAG, "Click operation failed: ${result.error}")
+                }
+                result.success
                 }
             }
             is UIOperation.Input -> {

@@ -1204,7 +1204,7 @@ open class DebuggerUITools(context: Context) : AccessibilityUITools(context) {
                 if (contentDesc != null) {
                     if (partialMatch) "content-desc=\".*?${Regex.escape(contentDesc)}.*?\"".toRegex()
                     else "content-desc=\"${Regex.escape(contentDesc)}\"".toRegex()
-                } else null
+                    } else null
 
             val boundsPattern = "bounds=\"\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]\"".toRegex()
 
@@ -1218,9 +1218,9 @@ open class DebuggerUITools(context: Context) : AccessibilityUITools(context) {
                 // 我们可以构建一个不可能匹配的正则表达式
                 nodeRegexPattern.append(" impossible-attribute='impossible-value'")
             } else {
-                if (resourceIdPattern != null)
-                        nodeRegexPattern.append(".*?${resourceIdPattern.pattern}")
-                if (classNamePattern != null) nodeRegexPattern.append(".*?${classNamePattern.pattern}")
+            if (resourceIdPattern != null)
+                    nodeRegexPattern.append(".*?${resourceIdPattern.pattern}")
+            if (classNamePattern != null) nodeRegexPattern.append(".*?${classNamePattern.pattern}")
                 if (contentDescPattern != null) nodeRegexPattern.append(".*?${contentDescPattern.pattern}")
             }
             

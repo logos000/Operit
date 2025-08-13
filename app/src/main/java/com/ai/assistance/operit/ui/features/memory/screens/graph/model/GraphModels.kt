@@ -10,7 +10,8 @@ data class Graph(
 data class Node(
     val id: String,
     val label: String,
-    val color: Color = Color.LightGray
+    val color: Color = Color.LightGray,
+    val metadata: Map<String, String> = emptyMap()
 )
 
 data class Edge(
@@ -18,5 +19,6 @@ data class Edge(
     val sourceId: String,
     val targetId: String,
     val label: String? = null,
-    val weight: Float = 1.0f
+    val weight: Float = 1.0f,
+    val metadata: Map<String, String> = emptyMap()
 ) 

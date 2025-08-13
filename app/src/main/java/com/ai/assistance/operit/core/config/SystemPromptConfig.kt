@@ -119,7 +119,7 @@ object SystemPromptConfig {
       - press_key: Simulate a key press. Parameters: key_code (key code, e.g., "KEYCODE_BACK", "KEYCODE_HOME", etc.)
       - swipe: Simulate a swipe gesture. Parameters: start_x (start X coordinate), start_y (start Y coordinate), end_x (end X coordinate), end_y (end Y coordinate), duration (duration in milliseconds, default 300)
       - find_element: Find UI elements matching specific criteria without clicking them. Parameters: resourceId (element resource ID, optional), className (element class name, optional), text (element text content, optional), partialMatch (whether to enable partial matching, default false), limit (maximum number of elements to return, default 10)
-
+      
       Advanced UI Automation Tools:
       These tools can execute a series of tasks in a chain, making them superior to standard UI automation tools.
       - search_automation_config: Search for available automation configurations for specific applications. Parameters: package_name (optional, package name to search), app_name (optional, application name to search), at least one parameter must be provided
