@@ -50,6 +50,16 @@ sealed interface UIOperation : StateTransform {
         override val description: String = "关闭应用"
     ) : UIOperation
 
+    data class PressKey(
+        val keyCode: String,
+        override val description: String = "Press a key"
+    ) : UIOperation
+
+    data class Wait(
+        val durationMs: Long,
+        override val description: String = "Wait for ${durationMs}ms"
+    ) : UIOperation
+
     // 流程控制与验证
     data class WaitForPage(
         val timeoutMs: Long = 5000,
@@ -104,6 +114,7 @@ sealed class UISelector {
     data class ByClassName(val name: String) : UISelector()
     data class ByBounds(val bounds: String) : UISelector()
     data class ByXPath(val xpath: String) : UISelector()
+    data class Compound(val selectors: List<UISelector>, val operator: String = "AND") : UISelector()
     
     companion object {
         fun byResourceId(id: String) = ByResourceId(id)
@@ -112,6 +123,7 @@ sealed class UISelector {
         fun byClassName(name: String) = ByClassName(name)
         fun byBounds(bounds: String) = ByBounds(bounds)
         fun byXPath(xpath: String) = ByXPath(xpath)
+        fun compound(selectors: List<UISelector>, operator: String = "AND") = Compound(selectors, operator)
     }
 }
 

@@ -12,6 +12,7 @@ import kotlinx.serialization.Serializable
 data class JsonUIRouteConfig(
     val appName: String,
     val packageName: String,
+    val description: String = "No description provided.", // Add description field
     val nodes: List<JsonUINode>,
     val edges: List<JsonUIEdge>,
     val functions: List<JsonUIFunction>
@@ -29,7 +30,8 @@ data class JsonUINode(
 data class JsonUIEdge(
     val from: String,
     val to: String,
-    val operation: JsonUIOperation,
+    val operation: JsonUIOperation? = null, // 保持对旧格式的兼容
+    val operations: List<JsonUIOperation> = emptyList(), // 新增，支持多步操作
     val validation: JsonUIOperation? = null,
     val conditions: Set<String> = emptySet(),
     val weight: Double = 1.0
@@ -45,9 +47,18 @@ data class JsonUIFunction(
 
 @Serializable
 data class JsonUISelector(
-    val type: String, // "ByText", "ByResourceId", "ByClassName"
-    val value: String,
-    val partialMatch: Boolean = false
+    val type: String, // "ByText", "ByResourceId", "ByClassName", "ByContentDescription", "ByBounds"
+    val value: String? = null,
+    val id: String? = null,
+    val text: String? = null,
+    val desc: String? = null,
+    val name: String? = null,
+    val bounds: String? = null,
+    val xpath: String? = null,
+    val partialMatch: Boolean = false,
+    val index: Int? = null, // 当多个元素匹配时，指定索引
+    val selectors: List<JsonUISelector>? = null, // 复合选择器
+    val operator: String? = null // 复合选择器的操作符："AND", "OR"
 )
 
 /**
@@ -79,6 +90,20 @@ sealed class JsonUIOperation {
     @SerialName("LaunchApp")
     data class LaunchApp(
         val packageName: String,
+        override val description: String? = null
+    ) : JsonUIOperation()
+
+    @Serializable
+    @SerialName("PressKey")
+    data class PressKey(
+        val keyCode: String,
+        override val description: String? = null
+    ) : JsonUIOperation()
+
+    @Serializable
+    @SerialName("Wait")
+    data class Wait(
+        val durationMs: Long,
         override val description: String? = null
     ) : JsonUIOperation()
 

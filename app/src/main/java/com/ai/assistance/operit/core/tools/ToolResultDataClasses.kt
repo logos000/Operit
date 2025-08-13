@@ -888,3 +888,183 @@ data class MemoryQueryResultData(
         }
     }
 }
+
+/** 自动化配置搜索结果数据 */
+@Serializable
+data class AutomationConfigSearchResult(
+    val searchPackageName: String?,
+    val searchAppName: String?,
+    val foundConfigs: List<ConfigInfo>,
+    val totalFound: Int
+) : ToolResultData() {
+    
+    @Serializable
+    data class ConfigInfo(
+        val appName: String,
+        val packageName: String,
+        val description: String,
+        val isBuiltIn: Boolean,
+        val fileName: String,
+        val matchType: String  // "packageName" or "appName"
+    )
+
+    override fun toString(): String {
+        val sb = StringBuilder()
+        sb.appendLine("自动化配置搜索结果:")
+        
+        if (!searchPackageName.isNullOrBlank()) {
+            sb.appendLine("搜索包名: $searchPackageName")
+        }
+        if (!searchAppName.isNullOrBlank()) {
+            sb.appendLine("搜索应用名: $searchAppName")
+        }
+        
+        sb.appendLine("找到 $totalFound 个匹配的配置:")
+        
+        if (foundConfigs.isEmpty()) {
+            sb.appendLine("未找到匹配的自动化配置")
+        } else {
+            foundConfigs.forEach { config ->
+                sb.appendLine()
+                sb.appendLine("应用名: ${config.appName}")
+                sb.appendLine("包名: ${config.packageName}")
+                sb.appendLine("描述: ${config.description}")
+                sb.appendLine("类型: ${if (config.isBuiltIn) "内置" else "用户导入"}")
+                sb.appendLine("匹配方式: ${if (config.matchType == "packageName") "包名匹配" else "应用名匹配"}")
+            }
+        }
+        
+        return sb.toString()
+    }
+}
+
+/** 自动化计划参数结果数据 */
+@Serializable
+data class AutomationPlanParametersResult(
+    val functionName: String,
+    val targetPackageName: String?,
+    val requiredParameters: List<ParameterInfo>,
+    val planSteps: Int,
+    val planDescription: String
+) : ToolResultData() {
+    
+    @Serializable
+    data class ParameterInfo(
+        val key: String,
+        val description: String,
+        val type: String,
+        val isRequired: Boolean,
+        val defaultValue: String?
+    )
+
+    override fun toString(): String {
+        val sb = StringBuilder()
+        sb.appendLine("自动化计划参数信息:")
+        sb.appendLine("功能名称: $functionName")
+        targetPackageName?.let { sb.appendLine("目标应用: $it") }
+        sb.appendLine("计划描述: $planDescription")
+        sb.appendLine()
+        
+        if (requiredParameters.isEmpty()) {
+            sb.appendLine("此功能不需要额外参数，可以直接执行。")
+        } else {
+            sb.appendLine("需要的参数 (${requiredParameters.size} 个):")
+            requiredParameters.forEach { param ->
+                sb.appendLine()
+                sb.appendLine("参数名: ${param.key}")
+                sb.appendLine("描述: ${param.description}")
+                sb.appendLine("类型: ${param.type}")
+                sb.appendLine("必需: ${if (param.isRequired) "是" else "否"}")
+                param.defaultValue?.let { sb.appendLine("默认值: $it") }
+            }
+        }
+        
+        return sb.toString()
+    }
+}
+
+/** 自动化执行结果数据 */
+@Serializable
+data class AutomationExecutionResult(
+    val functionName: String,
+    val providedParameters: Map<String, String>,
+    val executionSuccess: Boolean,
+    val executionMessage: String,
+    val executionError: String?,
+    val finalState: UIStateInfo?,
+    val executionSteps: Int
+) : ToolResultData() {
+    
+    @Serializable
+    data class UIStateInfo(
+        val nodeId: String,
+        val packageName: String,
+        val activityName: String
+    )
+
+    override fun toString(): String {
+        val sb = StringBuilder()
+        sb.appendLine("自动化执行结果:")
+        sb.appendLine("功能名称: $functionName")
+        sb.appendLine("执行状态: ${if (executionSuccess) "成功" else "失败"}")
+        sb.appendLine("执行步骤: $executionSteps")
+        sb.appendLine("结果消息: $executionMessage")
+        
+        if (!executionError.isNullOrBlank()) {
+            sb.appendLine("错误信息: $executionError")
+        }
+        
+        if (providedParameters.isNotEmpty()) {
+            sb.appendLine("\n使用的参数:")
+            providedParameters.forEach { (key, value) ->
+                sb.appendLine("  $key: $value")
+            }
+        }
+        
+        finalState?.let { state ->
+            sb.appendLine("\n最终状态:")
+            sb.appendLine("  节点ID: ${state.nodeId}")
+            sb.appendLine("  应用包名: ${state.packageName}")
+            sb.appendLine("  Activity: ${state.activityName}")
+        }
+        
+        return sb.toString()
+    }
+}
+
+/** 自动化功能列表结果数据 */
+@Serializable
+data class AutomationFunctionListResult(
+    val packageName: String?,
+    val functions: List<FunctionInfo>,
+    val totalCount: Int
+) : ToolResultData() {
+    
+    @Serializable
+    data class FunctionInfo(
+        val name: String,
+        val description: String,
+        val targetNodeName: String
+    )
+
+    override fun toString(): String {
+        val sb = StringBuilder()
+        sb.appendLine("可用的自动化功能:")
+        packageName?.let { sb.appendLine("应用包名: $it") }
+        sb.appendLine("功能数量: $totalCount")
+        sb.appendLine()
+        
+        if (functions.isEmpty()) {
+            sb.appendLine("当前没有可用的自动化功能")
+        } else {
+            functions.forEach { func ->
+                sb.appendLine("功能名: ${func.name}")
+                sb.appendLine("描述: ${func.description}")
+                sb.appendLine("目标页面: ${func.targetNodeName}")
+                sb.appendLine()
+            }
+        }
+        
+        return sb.toString()
+    }
+}

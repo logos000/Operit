@@ -16,8 +16,13 @@ fun PackagesList(
         onToggleImport: (String, Boolean) -> Unit
 ) {
     LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(vertical = 16.dp, horizontal = 4.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            contentPadding = PaddingValues(
+                start = 4.dp,
+                end = 4.dp,
+                top = 8.dp,
+                bottom = 88.dp // 增加底部边距避免被FAB遮挡
+            )
     ) {
         items(items = packages.entries.toList(), key = { (name, _) -> name }) { (name, pack) ->
             val isImported = importedPackages.contains(name)

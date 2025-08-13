@@ -6,14 +6,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.ai.assistance.operit.core.tools.PackageTool
 import com.ai.assistance.operit.core.tools.packTool.PackageManager
 
@@ -26,26 +27,22 @@ fun PackageDetailsDialog(
         onDismiss: () -> Unit,
         onPackageDeleted: () -> Unit
 ) {
-    // State for showing the delete confirmation dialog
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
-    // Load the package details
-    val toolPackage =
-            remember(packageName) {
-                try {
-                    // We need the full ToolPackage object to check isBuiltIn
-                    packageManager.getAvailablePackages()[packageName]
-                } catch (e: Exception) {
-                    Log.e("PackageDetailsDialog", "Failed to load package details", e)
-                    null
-                }
-            }
+    val toolPackage = remember(packageName) {
+        try {
+            packageManager.getAvailablePackages()[packageName]
+        } catch (e: Exception) {
+            Log.e("PackageDetailsDialog", "Failed to load package details", e)
+            null
+        }
+    }
 
     if (showDeleteConfirmDialog) {
         AlertDialog(
                 onDismissRequest = { showDeleteConfirmDialog = false },
-                title = { Text("Confirm Deletion") },
-                text = { Text("Are you sure you want to delete this package? This action cannot be undone.") },
+                title = { Text("确认删除") },
+                text = { Text("确定要删除包 \"${packageName}\" 吗？此操作无法撤销。") },
                 confirmButton = {
                     Button(
                             onClick = {
@@ -55,141 +52,261 @@ fun PackageDetailsDialog(
                                 if (deleted) {
                                     Log.d("PackageDetailsDialog", "Deletion successful, closing dialog and calling onPackageDeleted.")
                                     showDeleteConfirmDialog = false
-                                    onPackageDeleted() // Notify the parent screen
+                                    onPackageDeleted()
                                 } else {
                                     Log.e("PackageDetailsDialog", "Deletion failed. Closing confirm dialog.")
-                                    // Optionally, show an error message to the user
-                                    // For now, we just close the confirm dialog
                                     showDeleteConfirmDialog = false
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Text("Delete")
+                        Text("删除")
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showDeleteConfirmDialog = false }) {
-                        Text("Cancel")
+                        Text("取消")
                     }
                 }
         )
     }
 
-    AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(text = "Package Details") },
-            text = {
-                Column {
-                    Text(
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+                // 紧凑的标题栏
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Extension,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
                             text = packageName,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(text = packageDescription, style = MaterialTheme.typography.bodyMedium)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                            text = "Package Tools",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    if (toolPackage?.tools == null || toolPackage.tools.isEmpty()) {
-                        Text(
-                                text = "No tools found in this package",
-                                style = MaterialTheme.typography.bodyMedium
                         )
-                    } else {
-                        LazyColumn(
-                                modifier = Modifier.height(250.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(items = toolPackage.tools, key = { tool -> tool.name }) { tool ->
-                                Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(8.dp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                color = if (toolPackage?.isBuiltIn == true) 
+                                    MaterialTheme.colorScheme.primaryContainer 
+                                else 
+                                    MaterialTheme.colorScheme.secondaryContainer,
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = if (toolPackage?.isBuiltIn == true) "内置" else "外部",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (toolPackage?.isBuiltIn == true)
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    else
+                                        MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 包描述
+                if (packageDescription.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = packageDescription,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 工具列表
+                Text(
+                    text = "工具列表",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 工具内容
+                Box(modifier = Modifier.weight(1f)) {
+                    when {
+                        toolPackage?.tools == null || toolPackage.tools.isEmpty() -> {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                                        Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                        text = tool.name,
-                                                        style =
-                                                                MaterialTheme.typography
-                                                                        .titleMedium,
-                                                        fontWeight = FontWeight.Bold
-                                                )
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                                Text(
-                                                        text = tool.description,
-                                                        style = MaterialTheme.typography.bodyMedium
-                                                )
-                                            }
-
-                                            // Add Run Script button
-                                            IconButton(onClick = { onRunScript(tool) }) {
-                                                Icon(
-                                                        imageVector = Icons.Default.PlayArrow,
-                                                        contentDescription = "Run Script",
-                                                        tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                        }
-
-                                        if (tool.parameters.isNotEmpty()) {
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            Text(
-                                                    text = "Script Parameters:" + ":",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = FontWeight.Bold
-                                            )
-                                            for (param in tool.parameters) {
-                                                val requiredText =
-                                                        if (param.required) "(required)"
-                                                        else "(optional)"
-                                                Text(
-                                                        text =
-                                                                "• ${param.name} $requiredText: ${param.description}",
-                                                        style = MaterialTheme.typography.bodySmall
-                                                )
-                                            }
-                                        }
-                                    }
+                                    Icon(
+                                        Icons.Default.Apps,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(32.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "暂无可用工具",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        else -> {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                items(items = toolPackage.tools, key = { tool -> tool.name }) { tool ->
+                                    ToolCard(
+                                        tool = tool,
+                                        onExecute = { onRunScript(tool) }
+                                    )
                                 }
                             }
                         }
                     }
                 }
-            },
-            confirmButton = {
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 操作按钮
                 Row(
-                        horizontalArrangement = Arrangement.End,
-                        modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
                 ) {
-                    // Show delete button only for non-built-in packages
                     if (toolPackage != null && !toolPackage.isBuiltIn) {
-                        TextButton(
-                                onClick = { showDeleteConfirmDialog = true },
+                        OutlinedButton(
+                            onClick = { showDeleteConfirmDialog = true },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
                         ) {
                             Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = "Delete Package",
-                                    tint = MaterialTheme.colorScheme.error
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(Modifier.width(4.dp))
-                            Text("Delete", color = MaterialTheme.colorScheme.error)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("删除")
                         }
                     }
-                    Spacer(modifier = Modifier.weight(1f)) // Pushes buttons to edges
-                    TextButton(onClick = onDismiss) {
-                        Text(text = "Close")
+                    
+                    FilledTonalButton(onClick = onDismiss) {
+                        Text("关闭")
                     }
                 }
             }
-    )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ToolCard(
+    tool: PackageTool,
+    onExecute: (PackageTool) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        )
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                
+                Spacer(modifier = Modifier.width(8.dp))
+                
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = tool.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = tool.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                
+                FilledTonalButton(
+                    onClick = { onExecute(tool) },
+                    modifier = Modifier.height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    Text(
+                        text = "运行",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            }
+            
+            // 参数信息
+            if (tool.parameters.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Settings,
+                        contentDescription = null,
+                        modifier = Modifier.size(12.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                    tool.parameters.take(3).forEach { param ->
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = param.name,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    if (tool.parameters.size > 3) {
+                        Text(
+                            text = "+${tool.parameters.size - 3}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+            }
+        }
+    }
 }

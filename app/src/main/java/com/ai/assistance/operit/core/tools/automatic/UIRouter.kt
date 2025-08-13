@@ -52,7 +52,8 @@ class UIRouter(
             }
             config.edgeDefinitions.forEach { (from, edges) ->
                 edges.forEach { edge ->
-                    currentConfig.defineEdge(from, edge.toNodeName, edge.operation, edge.validation, edge.conditions, edge.weight)
+                    // 在合并时也需要考虑多操作
+                    currentConfig.defineEdge(from, edge.toNodeName, edge.operations, edge.validation, edge.conditions, edge.weight)
                     Log.d(TAG, "Merged edge: from $from to ${edge.toNodeName}")
                 }
             }
@@ -69,11 +70,17 @@ class UIRouter(
         this.routeConfig!!.nodeDefinitions.values.forEach { builder.addNode(it.name, it.name) }
         this.routeConfig!!.edgeDefinitions.forEach { (from, edges) ->
             edges.forEach { edgeDef ->
+                val operationToUse = if (edgeDef.operations.size == 1) {
+                    edgeDef.operations.first()
+                } else {
+                    UIOperation.Sequential(edgeDef.operations, "Sequential actions from $from to ${edgeDef.toNodeName}")
+                }
+
                 builder.addStatefulEdge(
                     from = from,
                     to = edgeDef.toNodeName,
-                    action = edgeDef.operation.description,
-                    stateTransform = edgeDef.operation,
+                    action = operationToUse.description,
+                    stateTransform = operationToUse,
                     conditions = edgeDef.conditions,
                     weight = edgeDef.weight
                 )
@@ -117,75 +124,101 @@ class UIRouter(
             }
             Log.d(TAG, "Current UI state determined as: ${startState.nodeId} (${startState.packageName})")
 
-            // 2. 将已知的必需参数合并到初始状态中
-            val startNodeState = startState.nodeState.withVariables(initialParams)
+            val targetNodeName = function.targetNodeName
+            val targetNode = routeConfig?.nodeDefinitions?.get(targetNodeName)
+            if (targetNode == null) {
+                Log.e(TAG, "Target node '$targetNodeName' not found in route config.")
+                return null
+            }
+            val targetPackageName = targetNode.packageName
 
-            // 3. 搜索到达功能目标页面的导航路径
-            Log.d(TAG, "Finding path from '${startNodeState.nodeId}' to '${function.targetNodeName}'")
+            var navPath: StatefulPath?
+            val launchOperations = mutableListOf<StatefulEdge>()
+            var pathStartState = startState.nodeState.withVariables(initialParams)
+
+            // 2. 检查是否需要切换应用
+            if (startState.packageName != targetPackageName) {
+                Log.i(TAG, "Cross-application plan required. From '${startState.packageName}' to '$targetPackageName'.")
+                
+                val targetAppHomeNodeName = routeConfig?.nodeDefinitions?.values?.find {
+                    it.packageName == targetPackageName && it.nodeType == UINodeType.APP_HOME
+                }?.name
+
+                if (targetAppHomeNodeName == null) {
+                    Log.e(TAG, "Cannot find APP_HOME node for package '$targetPackageName'. Cannot plan cross-app.")
+                    return null
+                }
+
+                val launchOperation = UIOperation.LaunchApp(targetPackageName)
+                val launchEdge = StatefulEdge(
+                    from = startState.nodeId,
+                    to = targetAppHomeNodeName,
+                    action = launchOperation.description,
+                    stateTransform = launchOperation
+                )
+                launchOperations.add(launchEdge)
+
+                pathStartState = NodeState(targetAppHomeNodeName).withVariables(initialParams)
+                Log.d(TAG, "Planning path within target app, from '$targetAppHomeNodeName' to '$targetNodeName'")
+            } else {
+                Log.d(TAG, "Same-application plan. Finding path from '${startState.nodeId}' to '$targetNodeName'")
+            }
+
+            // 3. 搜索导航路径
             val navResult = pathFinder.findPath(
-                startState = startNodeState,
-                targetNodeId = function.targetNodeName,
+                startState = pathStartState,
+                targetNodeId = targetNodeName,
                 runtimeContext = initialParams
             )
 
             if (!navResult.success || navResult.path == null) {
-                Log.w(TAG, "Path finding failed from ${startState.nodeId} to ${function.targetNodeName}. Result: ${navResult.message}")
+                Log.w(TAG, "Path finding failed from ${pathStartState.nodeId} to $targetNodeName. Result: ${navResult.message}")
                 return null
             }
-            Log.d(TAG, "Path found with ${navResult.path.edges.size} edges. Total weight: ${navResult.path.totalWeight}")
-
-            // 4. 检查是否需要启动应用
-            val navPath = navResult.path
-            val targetPackageName = routeConfig?.nodeDefinitions?.get(function.targetNodeName)?.packageName
-            var finalPath = navPath
-
-            if (targetPackageName != null && startState.packageName != targetPackageName) {
-                Log.i(TAG, "Current app (${startState.packageName}) differs from target app ($targetPackageName). Prepending LaunchApp operation.")
-                val launchOperation = UIOperation.LaunchApp(targetPackageName)
-                val launchEdge = StatefulEdge(
-                    from = "system_home", // 假设从系统桌面启动
-                    to = navPath.startState.nodeId,
-                    action = launchOperation.description,
-                    stateTransform = launchOperation
+            navPath = navResult.path
+            Log.d(TAG, "Path found with ${navPath.edges.size} edges. Total weight: ${navPath.totalWeight}")
+            
+            val fullPath = if (launchOperations.isNotEmpty()) {
+                // 如果有启动操作，我们需要构建一个全新的路径
+                navPath.copy(
+                    states = listOf(startState.nodeState) + navPath.states,
+                    edges = launchOperations + navPath.edges,
+                    totalWeight = navPath.totalWeight + launchOperations.sumOf { it.weight }
                 )
-                // 创建一个新的启动后的状态，或者直接使用路径的第一个状态
-                val stateAfterLaunch = navPath.startState
-                
-                finalPath = navPath.copy(
-                    states = listOf(stateAfterLaunch) + navPath.states,
-                    edges = listOf(launchEdge) + navPath.edges
-                )
+            } else {
+                // 如果在同一个应用内，直接使用找到的路径
+                navPath
             }
 
             // 5. 将导航路径和功能操作合并成一个完整的路径
             Log.d(TAG, "Appending final function operation: ${function.operation.description}")
             val finalEdge = StatefulEdge(
-                from = finalPath.endState.nodeId,
+                from = fullPath.endState.nodeId,
                 to = function.targetNodeName, // or a new 'end' node if needed
                 action = function.operation.description,
                 stateTransform = function.operation
             )
-            val finalState = function.operation.apply(finalPath.endState, initialParams)
+            val finalState = function.operation.apply(fullPath.endState, initialParams)
             if (finalState == null) {
                 Log.e(TAG, "Failed to apply final function operation. Path planning failed.")
                 return null
             }
             
-            val fullPath = finalPath.copy(
-                states = finalPath.states + finalState,
-                edges = finalPath.edges + finalEdge,
-                totalWeight = finalPath.totalWeight + finalEdge.weight
+            val completePath = fullPath.copy(
+                states = fullPath.states + finalState,
+                edges = fullPath.edges + finalEdge,
+                totalWeight = fullPath.totalWeight + finalEdge.weight
             )
 
-            Log.d(TAG, "Full path created with ${fullPath.edges.size} total steps.")
+            Log.d(TAG, "Full path created with ${completePath.edges.size} total steps.")
 
             // 6. 从完整路径中分析并提取所有需要的参数
-            val allRequiredParams = analyzeParametersFromPath(fullPath)
+            val allRequiredParams = analyzeParametersFromPath(completePath)
             Log.d(TAG, "Analyzed parameters from path. Required params: ${allRequiredParams.joinToString { it.key }}")
 
             // 7. 创建并返回执行计划
             val plan = RoutePlan(
-                path = fullPath,
+                path = completePath,
                 requiredParameters = allRequiredParams,
                 executor = operationExecutor
             )
