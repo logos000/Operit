@@ -214,7 +214,7 @@ fun UIDebuggerOverlay(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
+            Text(
                             text = message,
                             modifier = Modifier.weight(1f),
                             color = if (message.contains("成功") || message.startsWith("Successfully")) 
@@ -239,7 +239,7 @@ fun UIDebuggerOverlay(
 
 @Composable
 fun ElementHighlightOverlay(
-    elements: List<UIElement>,
+        elements: List<UIElement>,
     onElementClick: (UIElement) -> Unit
 ) {
     Canvas(
@@ -302,7 +302,7 @@ private fun DrawScope.drawElementHighlight(
 
 @Composable
 fun ElementInfoPanel(
-    element: UIElement,
+        element: UIElement,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -328,10 +328,10 @@ fun ElementInfoPanel(
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
+                    Text(
                     text = "控件信息",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(
@@ -361,9 +361,9 @@ fun ElementInfoPanel(
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             // Scrollable content
             Column(
                 modifier = Modifier
@@ -371,7 +371,7 @@ fun ElementInfoPanel(
                     .weight(1f, fill = false)
             ) {
                 // Basic info with smaller text
-                Text(
+            Text(
                     text = element.getFullDetails(),
                     style = MaterialTheme.typography.bodySmall,
                     fontSize = 12.sp,

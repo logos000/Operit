@@ -315,18 +315,25 @@ fun AIChatScreen(
     val showAiComputer by actualViewModel.showAiComputer.collectAsState()
     val view = LocalView.current
 
-    // Dynamically change window soft input mode based on web view visibility
-    DisposableEffect(showWebView) {
+    // 根据 showWebView 状态动态更改窗口软输入模式
+    // 使用 LaunchedEffect 响应状态变化
+    LaunchedEffect(showWebView) {
         val window = (view.context as? android.app.Activity)?.window
         if (showWebView) {
-            // 当进入工作区时，设置为 adjustResize
+            // 当工作区（WebView）显示时，设置为 adjustResize
             window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-            // 注册一个清理函数，当退出工作区时恢复原始模式
-            onDispose { window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN) }
         } else {
-            // 当不在工作区时，不执行任何操作，并注册一个空的清理函数
+            // 当工作区隐藏时，恢复为 adjustPan
             window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
-            onDispose {}
+        }
+    }
+
+    // 使用 DisposableEffect 确保在屏幕离开时总是恢复为默认值
+    DisposableEffect(Unit) {
+        onDispose {
+            val window = (view.context as? android.app.Activity)?.window
+            // 当 AIChatScreen 离开组合时，总是恢复为 adjustPan，以避免影响其他屏幕
+            window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
         }
     }
 

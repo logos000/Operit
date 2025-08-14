@@ -17,9 +17,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import com.ai.assistance.operit.core.tools.automatic.*
 import com.ai.assistance.operit.core.tools.automatic.config.AutomationPackageManager
+import com.ai.assistance.operit.core.tools.automatic.config.AutomationPackageInfo
+import com.ai.assistance.operit.core.tools.automatic.UIRouteConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.*
+import kotlinx.coroutines.delay
 
 // 简化的思维导图数据结构
 data class MindMapNode(
@@ -44,7 +48,6 @@ data class MindMapUiState(
     val connections: List<MindMapConnection> = emptyList(),
     val selectedNodeId: String? = null,
     val selectedConnectionId: String? = null,
-    val isEditMode: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null,
     // 导入导出状态
@@ -52,7 +55,10 @@ data class MindMapUiState(
     val showExportDialog: Boolean = false,
     val isImporting: Boolean = false,
     val isExporting: Boolean = false,
-    val importExportMessage: String? = null
+    val importExportMessage: String? = null,
+    // 内置配置包选择
+    val showBuiltInConfigDialog: Boolean = false,
+    val availablePackages: List<AutomationPackageInfo> = emptyList()
 )
 
 // 用于序列化的数据类
@@ -168,8 +174,10 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-    fun toggleEditMode() {
-        _uiState.update { it.copy(isEditMode = !it.isEditMode) }
+    fun clearSelection() {
+        _uiState.update {
+            it.copy(selectedNodeId = null, selectedConnectionId = null)
+        }
     }
 
     fun addNode(title: String, content: String, position: Offset) {
@@ -184,13 +192,69 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
         _uiState.update { 
             it.copy(nodes = it.nodes + newNode)
         }
+        
+        // 自动应用树形布局
+        applyTreeLayout()
     }
 
-    fun updateNodePosition(nodeId: String, newPosition: Offset) {
+    fun addChildNode(parentNodeId: String) {
+        _uiState.update { state ->
+            val parentNode = state.nodes.find { it.id == parentNodeId } ?: return@update state
+            
+            // Distribute children in a cone shape
+            val children = state.connections.filter { it.fromNodeId == parentNodeId }
+            val angleStep = 30
+            val initialAngle = -90 - (children.size - 1) * angleStep / 2
+            val newAngle = (initialAngle + children.size * angleStep) * (Math.PI / 180.0)
+
+            val newPosition = parentNode.position + Offset(
+                x = 250f * cos(newAngle).toFloat(),
+                y = 250f * sin(newAngle).toFloat()
+            )
+
+            val newNode = MindMapNode(
+                id = "node_${System.currentTimeMillis()}",
+                title = "新节点",
+                content = "点击编辑内容",
+                position = newPosition,
+                color = getRandomColor()
+            )
+            
+            val newConnection = MindMapConnection(
+                id = "conn_${System.currentTimeMillis()}",
+                fromNodeId = parentNode.id,
+                toNodeId = newNode.id
+            )
+
+            state.copy(
+                nodes = state.nodes + newNode,
+                connections = state.connections + newConnection,
+                selectedNodeId = newNode.id, // select the new node
+                selectedConnectionId = null
+            )
+        }
+        
+        // 自动应用树形布局
+        applyTreeLayout()
+    }
+
+    // 注释掉节点位置更新功能，因为已经移除了节点拖拽
+    // fun updateNodePosition(nodeId: String, newPosition: Offset) {
+    //     _uiState.update { 
+    //         it.copy(
+    //             nodes = it.nodes.map { node ->
+    //                 if (node.id == nodeId) node.copy(position = newPosition)
+    //                 else node
+    //             }
+    //         )
+    //     }
+    // }
+
+    fun updateNode(nodeId: String, title: String, content: String) {
         _uiState.update { 
             it.copy(
                 nodes = it.nodes.map { node ->
-                    if (node.id == nodeId) node.copy(position = newPosition)
+                    if (node.id == nodeId) node.copy(title = title, content = content)
                     else node
                 }
             )
@@ -208,6 +272,9 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
         _uiState.update { 
             it.copy(connections = it.connections + newConnection)
         }
+        
+        // 自动应用树形布局
+        applyTreeLayout()
     }
 
     fun deleteNode(nodeId: String) {
@@ -219,6 +286,9 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
                 }
             )
         }
+        
+        // 自动应用树形布局
+        applyTreeLayout()
     }
 
     fun deleteConnection(connectionId: String) {
@@ -227,15 +297,9 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
                 connections = it.connections.filter { it.id != connectionId }
             )
         }
-    }
-
-    fun clearSelection() {
-        _uiState.update { 
-            it.copy(
-                selectedNodeId = null,
-                selectedConnectionId = null
-            )
-        }
+        
+        // 自动应用树形布局
+        applyTreeLayout()
     }
 
     private fun getRandomColor(): Color {
@@ -276,6 +340,23 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
     /** 隐藏导出对话框 */
     fun hideExportDialog() {
         _uiState.update { it.copy(showExportDialog = false) }
+    }
+
+    /** 显示内置配置包选择对话框 */
+    fun showBuiltInConfigDialog() {
+        val packages = packageManager.getAllPackageInfo()
+        _uiState.update { 
+            it.copy(
+                showBuiltInConfigDialog = true, 
+                availablePackages = packages,
+                importExportMessage = null
+            ) 
+        }
+    }
+
+    /** 隐藏内置配置包选择对话框 */
+    fun hideBuiltInConfigDialog() {
+        _uiState.update { it.copy(showBuiltInConfigDialog = false) }
     }
 
     /** 导入思维导图数据 */
@@ -350,31 +431,20 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
                         ?: throw Exception("无法打开文件")
                     
                     val jsonContent = inputStream.bufferedReader().use { it.readText() }
-                    val data = json.decodeFromString<SerializableMindMapData>(jsonContent)
                     
-                    // 转换为内部数据结构
-                    val nodes = data.nodes.map { serializable ->
-                        MindMapNode(
-                            id = serializable.id,
-                            title = serializable.title,
-                            content = serializable.content,
-                            position = Offset(serializable.positionX, serializable.positionY),
-                            color = Color(serializable.colorValue.toULong()),
-                            nodeType = serializable.nodeType
-                        )
+                    // 尝试解析为思维导图数据
+                    try {
+                        val data = json.decodeFromString<SerializableMindMapData>(jsonContent)
+                        convertSerializableToMindMap(data)
+                    } catch (e: Exception) {
+                        // 如果失败，尝试解析为UI自动化配置
+                        try {
+                            val uiConfig = json.decodeFromString<JsonUIRouteConfig>(jsonContent)
+                            convertUIRouteConfigToMindMap(uiConfig)
+                        } catch (e2: Exception) {
+                            throw Exception("无法解析文件格式，请确保是有效的思维导图或UI配置文件")
+                        }
                     }
-                    
-                    val connections = data.connections.map { serializable ->
-                        MindMapConnection(
-                            id = serializable.id,
-                            fromNodeId = serializable.fromNodeId,
-                            toNodeId = serializable.toNodeId,
-                            label = serializable.label,
-                            color = Color(serializable.colorValue.toULong())
-                        )
-                    }
-                    
-                    Pair(nodes, connections)
                 }
                 
                 _uiState.update { 
@@ -382,8 +452,79 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
                         nodes = result.first,
                         connections = result.second,
                         isImporting = false,
-                        importExportMessage = "成功导入思维导图",
+                        importExportMessage = "成功导入数据",
                         showImportDialog = false
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update { 
+                    it.copy(
+                        isImporting = false,
+                        importExportMessage = "导入失败: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    /** 获取所有可用的内置自动化配置 */
+    fun getAvailableAutomationPackages(): List<AutomationPackageInfo> {
+        return packageManager.getAllPackageInfo()
+    }
+
+    /** 从内置自动化配置导入思维导图 */
+    fun importFromAutomationPackage(packageInfo: AutomationPackageInfo) {
+        viewModelScope.launch {
+            try {
+                _uiState.update { it.copy(isImporting = true, importExportMessage = null) }
+                
+                val result = withContext(Dispatchers.IO) {
+                    val config = packageManager.getConfigByAppPackageName(packageInfo.packageName)
+                        ?: throw Exception("无法加载配置包: ${packageInfo.name}")
+                    
+                    // 将UIRouteConfig转换为JsonUIRouteConfig格式
+                    val jsonConfig = JsonUIRouteConfig(
+                        appName = packageInfo.name,
+                        packageName = packageInfo.packageName,
+                        description = packageInfo.description,
+                        nodes = config.nodeDefinitions.values.map { node ->
+                            JsonUINode(
+                                name = node.name,
+                                description = "UI节点: ${node.name}",
+                                activityName = node.activityName,
+                                nodeType = node.nodeType.name
+                            )
+                        },
+                        edges = config.edgeDefinitions.flatMap { (fromName, edgeList) ->
+                            edgeList.map { edge ->
+                                JsonUIEdge(
+                                    from = fromName,
+                                    to = edge.toNodeName,
+                                    operations = emptyList(), // 简化处理
+                                    weight = edge.weight
+                                )
+                            }
+                        },
+                        functions = config.functionDefinitions.values.map { function ->
+                            JsonUIFunction(
+                                name = function.name,
+                                description = function.description,
+                                targetNodeName = function.targetNodeName
+                            )
+                        }
+                    )
+                    
+                    convertUIRouteConfigToMindMap(jsonConfig)
+                }
+                
+                _uiState.update { 
+                    it.copy(
+                        nodes = result.first,
+                        connections = result.second,
+                        isImporting = false,
+                        importExportMessage = "成功导入配置包: ${packageInfo.name}",
+                        showImportDialog = false,
+                        showBuiltInConfigDialog = false // 导入成功后关闭内置配置对话框
                     )
                 }
             } catch (e: Exception) {
@@ -587,9 +728,538 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
         )
     }
 
+    /** 将可序列化的思维导图数据转换为内部数据结构 */
+    private fun convertSerializableToMindMap(data: SerializableMindMapData): Pair<List<MindMapNode>, List<MindMapConnection>> {
+        val nodes = data.nodes.map { serializable ->
+            MindMapNode(
+                id = serializable.id,
+                title = serializable.title,
+                content = serializable.content,
+                position = Offset(serializable.positionX, serializable.positionY),
+                color = Color(serializable.colorValue.toULong()),
+                nodeType = serializable.nodeType
+            )
+        }
+        
+        val connections = data.connections.map { serializable ->
+            MindMapConnection(
+                id = serializable.id,
+                fromNodeId = serializable.fromNodeId,
+                toNodeId = serializable.toNodeId,
+                label = serializable.label,
+                color = Color(serializable.colorValue.toULong())
+            )
+        }
+        
+        return Pair(nodes, connections)
+    }
+
+    /** 将UI路由配置转换为思维导图数据结构 */
+    private fun convertUIRouteConfigToMindMap(config: JsonUIRouteConfig): Pair<List<MindMapNode>, List<MindMapConnection>> {
+        val nodeMap = mutableMapOf<String, MindMapNode>()
+        val connections = mutableListOf<MindMapConnection>()
+        
+        // 创建节点
+        config.nodes.forEachIndexed { index, jsonNode ->
+            val position = calculateNodePosition(index, config.nodes.size)
+            val nodeColor = getNodeColorByType(jsonNode.nodeType)
+            
+            val node = MindMapNode(
+                id = "node_${jsonNode.name}",
+                title = jsonNode.name,
+                content = "${jsonNode.description}\n类型: ${jsonNode.nodeType}${
+                    if (jsonNode.activityName != null) "\n活动: ${jsonNode.activityName}" else ""
+                }",
+                position = position,
+                color = nodeColor,
+                nodeType = jsonNode.nodeType
+            )
+            nodeMap[jsonNode.name] = node
+        }
+        
+        // 创建边连接
+        config.edges.forEach { edge ->
+            val fromNode = nodeMap[edge.from]
+            val toNode = nodeMap[edge.to]
+            
+            if (fromNode != null && toNode != null) {
+                val connection = MindMapConnection(
+                    id = "conn_${edge.from}_${edge.to}",
+                    fromNodeId = fromNode.id,
+                    toNodeId = toNode.id,
+                    label = if (edge.operations.isNotEmpty()) "操作" else "导航",
+                    color = Color.Gray
+                )
+                connections.add(connection)
+            }
+        }
+        
+        // 添加功能节点
+        config.functions.forEach { function ->
+            val targetNode = nodeMap[function.targetNodeName]
+            if (targetNode != null) {
+                val functionNode = MindMapNode(
+                    id = "func_${function.name}",
+                    title = "功能: ${function.name}",
+                    content = "${function.description}\n目标: ${function.targetNodeName}",
+                    position = Offset(targetNode.position.x + 200f, targetNode.position.y - 100f),
+                    color = Color(0xFFE91E63), // Pink for functions
+                    nodeType = "FUNCTION"
+                )
+                nodeMap["func_${function.name}"] = functionNode
+                
+                // 连接功能到目标节点
+                val connection = MindMapConnection(
+                    id = "conn_func_${function.name}_${function.targetNodeName}",
+                    fromNodeId = functionNode.id,
+                    toNodeId = targetNode.id,
+                    label = "执行",
+                    color = Color(0xFFE91E63)
+                )
+                connections.add(connection)
+            }
+        }
+        
+        return Pair(nodeMap.values.toList(), connections)
+    }
+
+    /** 根据节点索引计算节点位置 */
+    private fun calculateNodePosition(index: Int, totalNodes: Int): Offset {
+        val radius = 300f
+        val centerX = 500f
+        val centerY = 400f
+        
+        if (totalNodes == 1) {
+            return Offset(centerX, centerY)
+        }
+        
+        val angle = (2 * Math.PI * index / totalNodes).toFloat()
+        val x = centerX + radius * cos(angle)
+        val y = centerY + radius * sin(angle)
+        
+        return Offset(x, y)
+    }
+
+    /** 根据节点类型获取颜色 */
+    private fun getNodeColorByType(nodeType: String): Color {
+        return when (nodeType) {
+            "APP_HOME" -> Color(0xFF4CAF50) // Green
+            "LIST_PAGE" -> Color(0xFF2196F3) // Blue
+            "DETAIL_PAGE" -> Color(0xFFFF9800) // Orange
+            "SETTING_PAGE" -> Color(0xFF9C27B0) // Purple
+            "SYSTEM_PAGE" -> Color(0xFF607D8B) // Blue Grey
+            "FUNCTION" -> Color(0xFFE91E63) // Pink
+            else -> Color(0xFF795548) // Brown
+        }
+    }
+
     /** 清除导入导出消息 */
     fun clearImportExportMessage() {
         _uiState.update { it.copy(importExportMessage = null) }
+    }
+
+    // 自动布局相关功能
+    
+    /**
+     * 自动布局所有节点
+     */
+    fun autoLayout(layoutType: LayoutType = LayoutType.FORCE_DIRECTED) {
+        when (layoutType) {
+            LayoutType.FORCE_DIRECTED -> applyForceDirectedLayout()
+            LayoutType.TREE -> applyTreeLayout()
+            LayoutType.CIRCLE -> applyCircularLayout()
+            LayoutType.HIERARCHICAL -> applyHierarchicalLayout()
+        }
+    }
+    
+    /**
+     * 力导向布局算法
+     */
+    fun applyForceDirectedLayout() {
+        val state = _uiState.value
+        if (state.nodes.isEmpty()) return
+        
+        // 参数设置
+        val iterations = 50
+        val cooling = 0.95f
+        val repulsion = 30000f
+        val attraction = 0.1f
+        val damping = 0.9f
+        
+        val nodePositions = state.nodes.associate { it.id to it.position.copy() }.toMutableMap()
+        val velocities = state.nodes.associate { it.id to Offset.Zero }.toMutableMap()
+        
+        repeat(iterations) { iteration ->
+            val forces = mutableMapOf<String, Offset>()
+            
+            // 初始化力
+            state.nodes.forEach { node ->
+                forces[node.id] = Offset.Zero
+            }
+            
+            // 计算排斥力（所有节点之间）
+            state.nodes.forEach { node1 ->
+                state.nodes.forEach { node2 ->
+                    if (node1.id != node2.id) {
+                        val pos1 = nodePositions[node1.id]!!
+                        val pos2 = nodePositions[node2.id]!!
+                        val distance = sqrt((pos1.x - pos2.x).pow(2) + (pos1.y - pos2.y).pow(2))
+                        
+                        if (distance > 0) {
+                            val force = repulsion / (distance * distance)
+                            val direction = Offset(
+                                (pos1.x - pos2.x) / distance,
+                                (pos1.y - pos2.y) / distance
+                            )
+                            forces[node1.id] = forces[node1.id]!! + direction * force
+                        }
+                    }
+                }
+            }
+            
+            // 计算吸引力（连接的节点之间）
+            state.connections.forEach { connection ->
+                val pos1 = nodePositions[connection.fromNodeId]
+                val pos2 = nodePositions[connection.toNodeId]
+                
+                if (pos1 != null && pos2 != null) {
+                    val distance = sqrt((pos1.x - pos2.x).pow(2) + (pos1.y - pos2.y).pow(2))
+                    
+                    if (distance > 0) {
+                        val force = attraction * distance
+                        val direction = Offset(
+                            (pos2.x - pos1.x) / distance,
+                            (pos2.y - pos1.y) / distance
+                        )
+                        
+                        forces[connection.fromNodeId] = forces[connection.fromNodeId]!! + direction * force
+                        forces[connection.toNodeId] = forces[connection.toNodeId]!! - direction * force
+                    }
+                }
+            }
+            
+            // 应用力和更新位置
+            val temperature = 1.0f * cooling.pow(iteration.toFloat())
+            
+            state.nodes.forEach { node ->
+                val force = forces[node.id]!!
+                val velocity = velocities[node.id]!! * damping + force * 0.01f
+                velocities[node.id] = velocity
+                
+                val displacement = velocity * temperature
+                val newPosition = nodePositions[node.id]!! + displacement
+                
+                // 边界约束
+                nodePositions[node.id] = Offset(
+                    newPosition.x.coerceIn(50f, 1400f),
+                    newPosition.y.coerceIn(50f, 800f)
+                )
+            }
+        }
+        
+        // 更新节点位置
+        _uiState.update { state ->
+            state.copy(
+                nodes = state.nodes.map { node ->
+                    node.copy(position = nodePositions[node.id]!!)
+                }
+            )
+        }
+    }
+    
+    /**
+     * 改进的树形布局算法
+     * 更好地处理连接关系，支持多根节点和森林结构
+     */
+    private fun applyTreeLayout() {
+        val state = _uiState.value
+        if (state.nodes.isEmpty()) return
+        
+        val positions = mutableMapOf<String, Offset>()
+        val visited = mutableSetOf<String>()
+        
+        // 布局参数
+        val levelHeight = 180f
+        val nodeSpacing = 250f
+        val forestSpacing = 150f // 不同树之间的间距
+        var currentForestX = 0f
+        
+        // 找到所有根节点（没有入边的节点）
+        val rootNodes = findAllRootNodes(state)
+        
+        if (rootNodes.isEmpty()) {
+            // 如果没有明确的根节点（可能存在循环），选择第一个节点作为根
+            val firstNode = state.selectedNodeId?.let { selectedId ->
+                state.nodes.find { it.id == selectedId }
+            } ?: state.nodes.first()
+            
+            val tree = buildTreeFromNode(state, firstNode.id, visited)
+            layoutTreeNode(tree, 0, currentForestX, positions, levelHeight, nodeSpacing)
+        } else {
+            // 为每个根节点构建并布局其树
+            rootNodes.forEach { rootNode ->
+                if (rootNode.id !in visited) {
+                    val tree = buildTreeFromNode(state, rootNode.id, visited)
+                    val treeWidth = layoutTreeNode(tree, 0, currentForestX, positions, levelHeight, nodeSpacing)
+                    currentForestX = treeWidth + forestSpacing
+                }
+            }
+        }
+        
+        // 处理剩余的孤立节点
+        state.nodes.forEach { node ->
+            if (node.id !in positions) {
+                positions[node.id] = Offset(currentForestX, 0f)
+                currentForestX += nodeSpacing
+            }
+        }
+        
+        // 居中整个布局
+        val minX = positions.values.minOfOrNull { it.x } ?: 0f
+        val maxX = positions.values.maxOfOrNull { it.x } ?: 0f
+        val centerX = 700f // 画布中心
+        val offsetX = centerX - (minX + maxX) / 2
+        
+        // 更新节点位置
+        _uiState.update { state ->
+            state.copy(
+                nodes = state.nodes.map { node ->
+                    val pos = positions[node.id]
+                    if (pos != null) {
+                        node.copy(position = Offset(pos.x + offsetX, pos.y + 100f))
+                    } else {
+                        node
+                    }
+                }
+            )
+        }
+    }
+    
+    /**
+     * 圆形布局算法
+     */
+    fun applyCircularLayout() {
+        val state = _uiState.value
+        if (state.nodes.isEmpty()) return
+        
+        val centerX = 700f
+        val centerY = 400f
+        val radius = 250f
+        
+        val positions = mutableMapOf<String, Offset>()
+        
+        if (state.nodes.size == 1) {
+            positions[state.nodes.first().id] = Offset(centerX, centerY)
+        } else {
+            state.nodes.forEachIndexed { index, node ->
+                val angle = 2 * PI * index / state.nodes.size
+                val x = centerX + radius * cos(angle).toFloat()
+                val y = centerY + radius * sin(angle).toFloat()
+                positions[node.id] = Offset(x, y)
+            }
+        }
+        
+        // 更新节点位置
+        _uiState.update { state ->
+            state.copy(
+                nodes = state.nodes.map { node ->
+                    node.copy(position = positions[node.id] ?: node.position)
+                }
+            )
+        }
+    }
+    
+    /**
+     * 网格布局算法
+     */
+    fun applyGridLayout() {
+        val state = _uiState.value
+        if (state.nodes.isEmpty()) return
+        
+        val gridSize = ceil(sqrt(state.nodes.size.toDouble())).toInt()
+        val nodeSpacing = 200f
+        val startX = 300f
+        val startY = 200f
+        
+        val positions = mutableMapOf<String, Offset>()
+        
+        state.nodes.forEachIndexed { index, node ->
+            val row = index / gridSize
+            val col = index % gridSize
+            val x = startX + col * nodeSpacing
+            val y = startY + row * nodeSpacing
+            positions[node.id] = Offset(x, y)
+        }
+        
+        // 更新节点位置
+        _uiState.update { state ->
+            state.copy(
+                nodes = state.nodes.map { node ->
+                    node.copy(position = positions[node.id] ?: node.position)
+                }
+            )
+        }
+    }
+    
+    /**
+     * 分层布局算法
+     */
+    fun applyHierarchicalLayout() {
+        val state = _uiState.value
+        if (state.nodes.isEmpty()) return
+        
+        // 使用拓扑排序确定层级
+        val layers = topologicalSort(state)
+        val positions = mutableMapOf<String, Offset>()
+        
+        val layerHeight = 150f
+        val nodeSpacing = 200f
+        val startY = 100f
+        
+        layers.forEachIndexed { layerIndex, layer ->
+            val y = startY + layerIndex * layerHeight
+            val totalWidth = (layer.size - 1) * nodeSpacing
+            val startX = 700f - totalWidth / 2 // 居中
+            
+            layer.forEachIndexed { nodeIndex, nodeId ->
+                val x = startX + nodeIndex * nodeSpacing
+                positions[nodeId] = Offset(x, y)
+            }
+        }
+        
+        // 更新节点位置
+        _uiState.update { state ->
+            state.copy(
+                nodes = state.nodes.map { node ->
+                    node.copy(position = positions[node.id] ?: node.position)
+                }
+            )
+        }
+    }
+    
+    // 辅助方法
+    
+    private fun findRootNode(state: MindMapUiState): MindMapNode? {
+        val nodesWithIncomingEdges = state.connections.map { it.toNodeId }.toSet()
+        return state.nodes.find { it.id !in nodesWithIncomingEdges }
+            ?: state.nodes.find { it.id == state.selectedNodeId }
+    }
+    
+    /**
+     * 找到所有根节点（没有入边的节点）
+     */
+    private fun findAllRootNodes(state: MindMapUiState): List<MindMapNode> {
+        val nodesWithIncomingEdges = state.connections.map { it.toNodeId }.toSet()
+        return state.nodes.filter { it.id !in nodesWithIncomingEdges }
+    }
+    
+    /**
+     * 从指定节点构建树结构，避免重复访问
+     */
+    private fun buildTreeFromNode(state: MindMapUiState, rootId: String, visited: MutableSet<String>): TreeNode {
+        visited.add(rootId)
+        
+        val children = state.connections
+            .filter { it.fromNodeId == rootId && it.toNodeId !in visited }
+            .map { buildTreeFromNode(state, it.toNodeId, visited) }
+        
+        return TreeNode(rootId, children)
+    }
+    
+    private fun buildTree(state: MindMapUiState, rootId: String): TreeNode {
+        val children = state.connections
+            .filter { it.fromNodeId == rootId }
+            .map { buildTree(state, it.toNodeId) }
+        
+        return TreeNode(rootId, children)
+    }
+    
+    private fun layoutTreeNode(
+        tree: TreeNode,
+        level: Int,
+        startX: Float,
+        positions: MutableMap<String, Offset>,
+        levelHeight: Float,
+        nodeSpacing: Float
+    ): Float {
+        val y = level * levelHeight
+        
+        if (tree.children.isEmpty()) {
+            positions[tree.nodeId] = Offset(startX, y)
+            return startX + nodeSpacing
+        }
+        
+        var currentX = startX
+        val childPositions = mutableListOf<Float>()
+        
+        tree.children.forEach { child ->
+            val childCenterX = layoutTreeNode(child, level + 1, currentX, positions, levelHeight, nodeSpacing)
+            childPositions.add((currentX + childCenterX - nodeSpacing) / 2)
+            currentX = childCenterX
+        }
+        
+        val nodeX = if (childPositions.isNotEmpty()) {
+            (childPositions.first() + childPositions.last()) / 2
+        } else {
+            startX
+        }
+        
+        positions[tree.nodeId] = Offset(nodeX, y)
+        return currentX
+    }
+    
+    private fun topologicalSort(state: MindMapUiState): List<List<String>> {
+        val inDegree = mutableMapOf<String, Int>()
+        val outEdges = mutableMapOf<String, MutableList<String>>()
+        
+        // 初始化
+        state.nodes.forEach { node ->
+            inDegree[node.id] = 0
+            outEdges[node.id] = mutableListOf()
+        }
+        
+        // 计算入度和出边
+        state.connections.forEach { connection ->
+            inDegree[connection.toNodeId] = (inDegree[connection.toNodeId] ?: 0) + 1
+            outEdges[connection.fromNodeId]?.add(connection.toNodeId)
+        }
+        
+        val layers = mutableListOf<List<String>>()
+        val remaining = inDegree.toMutableMap()
+        
+        while (remaining.isNotEmpty()) {
+            val currentLayer = remaining.filter { it.value == 0 }.keys.toList()
+            if (currentLayer.isEmpty()) break // 避免循环
+            
+            layers.add(currentLayer)
+            
+            currentLayer.forEach { nodeId ->
+                remaining.remove(nodeId)
+                outEdges[nodeId]?.forEach { targetId ->
+                    remaining[targetId] = (remaining[targetId] ?: 1) - 1
+                }
+            }
+        }
+        
+        // 添加剩余节点（处理循环情况）
+        if (remaining.isNotEmpty()) {
+            layers.add(remaining.keys.toList())
+        }
+        
+        return layers
+    }
+    
+    // 数据类
+    private data class TreeNode(
+        val nodeId: String,
+        val children: List<TreeNode>
+    )
+    
+    enum class LayoutType {
+        FORCE_DIRECTED,  // 力导向布局
+        TREE,           // 树形布局
+        CIRCLE,         // 圆形布局
+        HIERARCHICAL    // 分层布局
     }
 }
 
