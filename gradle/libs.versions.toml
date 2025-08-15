@@ -69,6 +69,7 @@ objectbox = "3.8.0"
 mediapipe = "0.10.11"
  uiTextAndroid = "1.6.2"
  animationAndroid = "1.6.2"
+ uiAndroid = "1.6.2"
 
  [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -225,6 +226,7 @@ objectbox-kotlin = { group = "io.objectbox", name = "objectbox-kotlin", version.
 objectbox-processor = { group = "io.objectbox", name = "objectbox-processor", version.ref = "objectbox" }
  androidx-ui-text-android = { group = "androidx.compose.ui", name = "ui-text-android", version.ref = "uiTextAndroid" }
  androidx-animation-android = { group = "androidx.compose.animation", name = "animation-android", version.ref = "animationAndroid" }
+ androidx-ui-android = { group = "androidx.compose.ui", name = "ui-android", version.ref = "uiAndroid" }
 
  [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

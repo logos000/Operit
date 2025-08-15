@@ -9,6 +9,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Divider
 import androidx.compose.foundation.rememberScrollState
@@ -84,27 +86,28 @@ fun UIDebuggerScreen(navController: NavController) {
         }
     )
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("思维导图编辑器") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            )
-        },
-        floatingActionButton = {
+    Scaffold(floatingActionButton = {
             Column(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Add Root Node Button
+                // Add Function Node Button - 只能添加功能节点
                 FloatingActionButton(
-                    onClick = { viewModel.addNode("根节点", "这是新的根节点", Offset(400f, 400f)) },
+                    onClick = { 
+                        viewModel.addNode(
+                            title = "功能节点", 
+                            content = "新功能：点击编辑设置", 
+                            position = Offset(400f, 400f)
+                        ) 
+                    },
                     containerColor = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(56.dp)
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "添加根节点")
+                    Icon(
+                        imageVector = Icons.Default.Build, 
+                        contentDescription = "添加功能节点",
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
                 }
 
                 // Import Config
@@ -116,7 +119,11 @@ fun UIDebuggerScreen(navController: NavController) {
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                     modifier = Modifier.size(48.dp)
                 ) {
-                    Icon(Icons.Default.FileUpload, contentDescription = "导入配置")
+                    Icon(
+                        imageVector = Icons.Default.FileUpload, 
+                        contentDescription = "导入配置",
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
                 }
 
                 // Import from Built-in Configs
@@ -125,7 +132,11 @@ fun UIDebuggerScreen(navController: NavController) {
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier.size(48.dp)
                 ) {
-                    Icon(Icons.Default.Apps, contentDescription = "内置配置")
+                    Icon(
+                        imageVector = Icons.Default.Apps, 
+                        contentDescription = "内置配置",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
                 // Export Config  
@@ -134,7 +145,11 @@ fun UIDebuggerScreen(navController: NavController) {
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier.size(48.dp)
                 ) {
-                    Icon(Icons.Default.FileDownload, contentDescription = "导出配置")
+                    Icon(
+                        imageVector = Icons.Default.FileDownload, 
+                        contentDescription = "导出配置",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -292,6 +307,17 @@ fun UIDebuggerScreen(navController: NavController) {
                 onClearMessage = { viewModel.clearImportExportMessage() }
             )
         }
+
+        // Delete Confirmation Dialog
+        if (uiState.showDeleteConfirmDialog) {
+            DeleteConfirmDialog(
+                nodeToDelete = uiState.nodeToDelete?.let { nodeId ->
+                    uiState.nodes.find { it.id == nodeId }
+                },
+                onConfirm = { viewModel.confirmDeleteNode() },
+                onDismiss = { viewModel.cancelDeleteNode() }
+            )
+        }
     }
 }
 
@@ -311,7 +337,7 @@ fun MindMapCanvas(
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     
-    val nodeSize = Size(140f, 90f) // Increased node size for better readability
+    val nodeSize = Size(120f, 80f) // Smaller nodes with larger spacing between them
 
     // Resolve colors from the theme before entering the DrawScope
     val contextMenuButtonBackgroundColor = MaterialTheme.colorScheme.secondaryContainer
@@ -321,30 +347,28 @@ fun MindMapCanvas(
     Canvas(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
+            .pointerInput(nodes, connections, selectedNodeId) {
+                coroutineScope {
+                    // 平移和缩放手势
+                    launch {
                 detectTransformGestures { centroid, pan, zoom, _ ->
-                    val oldScale = scale
-                    val newScale = (scale * zoom).coerceIn(0.2f, 3f)
-                    offset = (offset - centroid) * (newScale / oldScale) + centroid + pan
-                    scale = newScale
+                        val oldScale = scale
+                        val newScale = (scale * zoom).coerceIn(0.2f, 3f)
+                        offset = (offset - centroid) * (newScale / oldScale) + centroid + pan
+                        scale = newScale
+                    }
                 }
-            }
-            .pointerInput(Unit) {
-                detectDragGestures { _, dragAmount ->
-                    // 只处理画布拖拽
-                    offset += dragAmount
-                }
-            }
-            .pointerInput(Unit) {
+                    // 点击手势
+                    launch {
                 detectTapGestures(
                     onTap = { tapOffset ->
                         val canvasOffset = (tapOffset - offset) / scale
 
                         // Check for context menu clicks first
                         val selectedNode = selectedNodeId?.let { id -> nodes.find { it.id == id } }
-                        if (selectedNode != null) {
+                                if (selectedNode != null) {
                             val contextMenuHandled = handleContextMenuClick(
-                                tapOffset = tapOffset, // Use screen coordinates
+                                        tapOffset = tapOffset,
                                 node = selectedNode,
                                 scale = scale,
                                 offset = offset,
@@ -375,13 +399,15 @@ fun MindMapCanvas(
 
                             if (clickedConnection != null) {
                                 onConnectionClick(clickedConnection)
-                            } else {
+        } else {
                                 onCanvasClick(canvasOffset)
                             }
                         }
                     }
-                )
-            }
+            )
+                    }
+                }
+        }
     ) {
         // 绘制连接线 - 使用与 GraphVisualizer 相同的坐标计算方式
         connections.forEach { connection ->
@@ -404,14 +430,40 @@ fun MindMapCanvas(
                     strokeWidth = strokeWidth
                 )
                 
-                // 绘制连接标签
-                if (connection.label.isNotEmpty()) {
+                // 绘制连接标签和操作信息
+                val displayText = when {
+                    connection.actionType.isNotEmpty() && connection.targetElement.isNotEmpty() -> 
+                        "${connection.actionType}:${connection.targetElement.take(10)}"
+                    connection.actionType.isNotEmpty() -> connection.actionType
+                    connection.label.isNotEmpty() -> connection.label
+                    else -> "操作"
+                }
+                
+                if (displayText.isNotEmpty()) {
                     val center = (start + end) / 2f
+                    
+                    // 计算文本尺寸
+                    val textWidth = maxOf(displayText.length * 6f * scale, 40f * scale)
+                    val textHeight = 16f * scale
+                    
+                    
+                    // 绘制操作文本
                     drawText(
-                        text = connection.label,
+                        text = displayText,
                         position = center,
-                        color = color
+                        color = Color.Black,
+                        fontSize = 4.sp.toPx() * scale
                     )
+                    
+                    // 如果有条件信息，在下方显示
+                    if (connection.condition.isNotEmpty()) {
+                        drawText(
+                            text = "条件: ${connection.condition.take(8)}",
+                            position = center + Offset(0f, 12f * scale),
+                            color = Color.Gray,
+                            fontSize = 4.sp.toPx() * scale
+                    )
+                    }
                 }
             }
         }
@@ -451,13 +503,33 @@ fun MindMapCanvas(
                 style = Stroke(width = borderWidth * scale)
             )
             
-            // 绘制节点文本
+            // 绘制节点图标和文本
+            val iconSize = 24f * scale
+            val iconPosition = screenPosition - Offset(0f, 15f * scale)
+            val titlePosition = screenPosition + Offset(0f,4f * scale)
+            val activityPosition = screenPosition + Offset(0f, 25f * scale)
+            
+            // 移除圆形图标绘制
+            
+            // 移除图标显示
+            
+            // 绘制节点标题
             drawText(
                 text = node.title,
-                position = screenPosition,
+                position = titlePosition,
                 color = Color.Black,
-                fontSize = 16.sp.toPx() * scale // Scale font size
+                fontSize = maxOf(8.sp.toPx() * scale, 8f) // 再次减小标题字体大小
             )
+            
+            // 绘制活动名称（如果有的话）
+            if (node.content.isNotEmpty()) {
+                drawText(
+                    text = node.content.take(20) + if (node.content.length > 20) "..." else "",
+                    position = activityPosition,
+                    color = Color.Gray,
+                    fontSize = maxOf(8.sp.toPx() * scale, 8f) // 再次减小字体大小
+            )
+            }
         }
 
         // Draw context menu for selected node
@@ -487,9 +559,9 @@ private fun handleContextMenuClick(
     onAddChild: () -> Unit,
     onDelete: () -> Unit
 ): Boolean {
-    val scaledNodeSize = Size(140f, 90f) * scale
+    val scaledNodeSize = Size(120f, 80f) * scale
     val radius = 24f * scale
-    val distance = 40f * scale
+    val distance = 50f * scale
     
     val screenPosition = node.position * scale + offset
     
@@ -524,9 +596,9 @@ private fun DrawScope.drawContextMenu(
     buttonIconColor: Color
 ) {
     val screenPosition = node.position * scale + offset
-    val scaledNodeSize = Size(140f, 90f) * scale
+    val scaledNodeSize = Size(120f, 80f) * scale
     val radius = 24f * scale
-    val distance = 40f * scale
+    val distance = 50f * scale
 
     val positions = listOf(
         screenPosition + Offset(0f, -scaledNodeSize.height / 2 - distance), // Top
@@ -611,10 +683,16 @@ private fun DrawScope.drawText(
 ) {
     drawContext.canvas.nativeCanvas.apply {
         val paint = android.graphics.Paint().apply {
-            this.color = color.value.toInt()
+            this.color = android.graphics.Color.argb(
+                (color.alpha * 255).toInt(),
+                (color.red * 255).toInt(),
+                (color.green * 255).toInt(),
+                (color.blue * 255).toInt()
+            )
             textAlign = android.graphics.Paint.Align.CENTER
             this.textSize = fontSize
             isAntiAlias = true
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
         
         drawText(
@@ -1184,6 +1262,74 @@ fun BuiltInConfigSelectionDialog(
                 enabled = !isLoading
             ) {
                 Text("关闭")
+            }
+        }
+    )
+}
+
+@Composable
+fun DeleteConfirmDialog(
+    nodeToDelete: MindMapNode?,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { 
+            Text(
+                text = "确认删除", 
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.error
+            ) 
+        },
+        text = {
+            Column {
+                Text("您确定要删除这个节点吗？")
+                nodeToDelete?.let { node ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f)
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "节点标题: ${node.title}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            if (node.content.isNotBlank()) {
+                                Text(
+                                    text = "节点内容: ${node.content}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "此操作不可撤销，相关的连接也会一同删除。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("删除", color = MaterialTheme.colorScheme.onError)
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text("取消")
             }
         }
     )

@@ -40,6 +40,9 @@ data class MindMapConnection(
     val fromNodeId: String,
     val toNodeId: String,
     val label: String = "",
+    val actionType: String = "", // 操作类型：click, input, swipe等
+    val targetElement: String = "", // 目标元素信息
+    val condition: String = "", // 触发条件
     val color: Color = Color.Gray
 )
 
@@ -58,7 +61,10 @@ data class MindMapUiState(
     val importExportMessage: String? = null,
     // 内置配置包选择
     val showBuiltInConfigDialog: Boolean = false,
-    val availablePackages: List<AutomationPackageInfo> = emptyList()
+    val availablePackages: List<AutomationPackageInfo> = emptyList(),
+    // 删除确认对话框
+    val showDeleteConfirmDialog: Boolean = false,
+    val nodeToDelete: String? = null
 )
 
 // 用于序列化的数据类
@@ -111,41 +117,68 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
     private fun createSampleMindMap() {
         val centerNode = MindMapNode(
             id = "center",
-            title = "UI自动化",
-            content = "核心概念",
+            title = "应用启动",
+            content = "com.example.app",
             position = Offset(400f, 300f),
             color = Color(0xFF2196F3),
-            nodeType = "CENTER"
+            nodeType = "START"
         )
 
         val node1 = MindMapNode(
             id = "node1",
-            title = "页面识别",
-            content = "识别UI元素和页面结构",
+            title = "登录页面",
+            content = "com.example.app.LoginActivity",
             position = Offset(200f, 200f),
-            color = Color(0xFF4CAF50)
+            color = Color(0xFF4CAF50),
+            nodeType = "CLICK"
         )
 
         val node2 = MindMapNode(
             id = "node2",
-            title = "操作执行",
-            content = "点击、输入、滑动等操作",
+            title = "用户输入",
+            content = "com.example.app.MainActivity",
             position = Offset(600f, 200f),
-            color = Color(0xFFFF9800)
+            color = Color(0xFFFF9800),
+            nodeType = "INPUT"
         )
 
         val node3 = MindMapNode(
             id = "node3",
-            title = "验证检查",
-            content = "验证操作结果和页面状态",
+            title = "首页滑动",
+            content = "com.example.app.HomeActivity",
             position = Offset(400f, 500f),
-            color = Color(0xFF9C27B0)
+            color = Color(0xFF9C27B0),
+            nodeType = "SWIPE"
         )
 
         val connections = listOf(
-            MindMapConnection("conn1", "center", "node1", "包含"),
-            MindMapConnection("conn2", "center", "node2", "包含"),
-            MindMapConnection("conn3", "center", "node3", "包含")
+            MindMapConnection(
+                id = "conn1",
+                fromNodeId = "center",
+                toNodeId = "node1",
+                label = "点击登录",
+                actionType = "CLICK",
+                targetElement = "登录按钮",
+                condition = "页面加载完成"
+            ),
+            MindMapConnection(
+                id = "conn2",
+                fromNodeId = "center",
+                toNodeId = "node2",
+                label = "输入用户名",
+                actionType = "INPUT",
+                targetElement = "用户名输入框",
+                condition = "输入框可见"
+            ),
+            MindMapConnection(
+                id = "conn3",
+                fromNodeId = "center",
+                toNodeId = "node3",
+                label = "滑动页面",
+                actionType = "SWIPE",
+                targetElement = "主页面",
+                condition = "内容超出屏幕"
+            )
         )
 
         _uiState.update { 
@@ -180,13 +213,14 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-    fun addNode(title: String, content: String, position: Offset) {
+    fun addNode(title: String, content: String, position: Offset, nodeType: String = "NORMAL") {
         val newNode = MindMapNode(
             id = "node_${System.currentTimeMillis()}",
             title = title,
             content = content,
             position = position,
-            color = getRandomColor()
+            color = getNodeColorByNodeType(nodeType),
+            nodeType = nodeType
         )
 
         _uiState.update { 
@@ -197,31 +231,41 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
         applyTreeLayout()
     }
 
+    fun addFunctionNode(title: String, content: String, position: Offset) {
+        addNode(title, content, position, "FUNCTION")
+    }
+
+    private fun getNodeColorByNodeType(nodeType: String): Color {
+        return when (nodeType) {
+            "APP_HOME" -> Color(0xFF4CAF50) // Green
+            "LIST_PAGE" -> Color(0xFF2196F3) // Blue  
+            "DETAIL_PAGE" -> Color(0xFFFF9800) // Orange
+            "SETTING_PAGE" -> Color(0xFF9C27B0) // Purple
+            "SYSTEM_PAGE" -> Color(0xFF607D8B) // Blue Grey
+            "FUNCTION" -> Color(0xFFE91E63) // Pink for functions
+            "DIALOG" -> Color(0xFFFF5722) // Deep Orange
+            else -> getRandomColor() // Random for others
+        }
+    }
+
     fun addChildNode(parentNodeId: String) {
+        val newNodeId = "node_${System.currentTimeMillis()}"
+        val newConnectionId = "conn_${System.currentTimeMillis()}"
+        
         _uiState.update { state ->
             val parentNode = state.nodes.find { it.id == parentNodeId } ?: return@update state
             
-            // Distribute children in a cone shape
-            val children = state.connections.filter { it.fromNodeId == parentNodeId }
-            val angleStep = 30
-            val initialAngle = -90 - (children.size - 1) * angleStep / 2
-            val newAngle = (initialAngle + children.size * angleStep) * (Math.PI / 180.0)
-
-            val newPosition = parentNode.position + Offset(
-                x = 250f * cos(newAngle).toFloat(),
-                y = 250f * sin(newAngle).toFloat()
-            )
-
+            // 创建新节点，暂时使用临时位置
             val newNode = MindMapNode(
-                id = "node_${System.currentTimeMillis()}",
+                id = newNodeId,
                 title = "新节点",
                 content = "点击编辑内容",
-                position = newPosition,
+                position = parentNode.position + Offset(100f, 100f), // 临时位置
                 color = getRandomColor()
             )
             
             val newConnection = MindMapConnection(
-                id = "conn_${System.currentTimeMillis()}",
+                id = newConnectionId,
                 fromNodeId = parentNode.id,
                 toNodeId = newNode.id
             )
@@ -234,7 +278,7 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
             )
         }
         
-        // 自动应用树形布局
+        // 立即重新应用树形布局
         applyTreeLayout()
     }
 
@@ -280,15 +324,39 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
     fun deleteNode(nodeId: String) {
         _uiState.update { 
             it.copy(
-                nodes = it.nodes.filter { it.id != nodeId },
-                connections = it.connections.filter { 
-                    it.fromNodeId != nodeId && it.toNodeId != nodeId 
-                }
+                showDeleteConfirmDialog = true,
+                nodeToDelete = nodeId
             )
         }
-        
-        // 自动应用树形布局
-        applyTreeLayout()
+    }
+    
+    fun confirmDeleteNode() {
+        val nodeToDelete = _uiState.value.nodeToDelete
+        if (nodeToDelete != null) {
+            _uiState.update { 
+                it.copy(
+                    nodes = it.nodes.filter { it.id != nodeToDelete },
+                connections = it.connections.filter { 
+                        it.fromNodeId != nodeToDelete && it.toNodeId != nodeToDelete 
+                    },
+                    showDeleteConfirmDialog = false,
+                    nodeToDelete = null,
+                    selectedNodeId = null // 清除选择状态
+                )
+            }
+            
+            // 自动应用树形布局
+            applyTreeLayout()
+        }
+    }
+    
+    fun cancelDeleteNode() {
+        _uiState.update { 
+            it.copy(
+                showDeleteConfirmDialog = false,
+                nodeToDelete = null
+            )
+        }
     }
 
     fun deleteConnection(connectionId: String) {
@@ -500,7 +568,7 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
                                 JsonUIEdge(
                                     from = fromName,
                                     to = edge.toNodeName,
-                                    operations = emptyList(), // 简化处理
+                                    operations = convertUIOperationsToJson(edge.operations),
                                     weight = edge.weight
                                 )
                             }
@@ -754,6 +822,178 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
         return Pair(nodes, connections)
     }
 
+    /** 操作信息数据类 */
+    private data class OperationInfo(
+        val label: String,
+        val actionType: String,
+        val targetElement: String,
+        val condition: String
+    )
+
+    /** 提取操作信息 */
+    private fun extractOperationInfo(operations: List<JsonUIOperation>): OperationInfo {
+        if (operations.isEmpty()) {
+            return OperationInfo("导航", "", "", "")
+        }
+        
+        val primaryOperation = operations.first()
+        val actionType = when (primaryOperation) {
+            is JsonUIOperation.Click -> "CLICK"
+            is JsonUIOperation.Input -> "INPUT"
+            is JsonUIOperation.LaunchApp -> "LAUNCH"
+            is JsonUIOperation.PressKey -> "PRESS_KEY"
+            is JsonUIOperation.Wait -> "WAIT"
+            is JsonUIOperation.Sequential -> "SEQUENTIAL"
+            is JsonUIOperation.ValidateElement -> "VALIDATE"
+        }
+        
+        val targetElement = when (primaryOperation) {
+            is JsonUIOperation.Click -> extractSelectorText(primaryOperation.selector)
+            is JsonUIOperation.Input -> extractSelectorText(primaryOperation.selector)
+            is JsonUIOperation.LaunchApp -> primaryOperation.packageName
+            is JsonUIOperation.PressKey -> primaryOperation.keyCode
+            is JsonUIOperation.Wait -> "${primaryOperation.durationMs}ms"
+            is JsonUIOperation.Sequential -> "多步操作(${primaryOperation.operations.size})"
+            is JsonUIOperation.ValidateElement -> extractSelectorText(primaryOperation.selector)
+        }
+        
+        val label = primaryOperation.description ?: when (primaryOperation) {
+            is JsonUIOperation.Click -> "点击"
+            is JsonUIOperation.Input -> "输入"
+            is JsonUIOperation.LaunchApp -> "启动应用"
+            is JsonUIOperation.PressKey -> "按键"
+            is JsonUIOperation.Wait -> "等待"
+            is JsonUIOperation.Sequential -> "顺序操作"
+            is JsonUIOperation.ValidateElement -> "验证元素"
+        }
+        
+        val condition = if (operations.size > 1) {
+            "多步操作：共${operations.size}步"
+        } else {
+            ""
+        }
+        
+        return OperationInfo(label, actionType, targetElement, condition)
+    }
+
+    /** 提取选择器的文本描述 */
+    private fun extractSelectorText(selector: JsonUISelector): String {
+        return when (selector.type) {
+            "ByText" -> selector.text ?: selector.value ?: "文本元素"
+            "ByResourceId" -> selector.id ?: selector.value ?: "ID元素"
+            "ByClassName" -> selector.name ?: selector.value ?: "类名元素"
+            "ByContentDescription" -> selector.desc ?: selector.value ?: "描述元素"
+            "ByBounds" -> "坐标元素"
+            "ByXPath" -> "XPath元素"
+            "Compound" -> "复合选择器"
+            else -> "未知元素"
+        }
+    }
+
+    /** 将UIOperation转换为JsonUIOperation */
+    private fun convertUIOperationsToJson(operations: List<UIOperation>): List<JsonUIOperation> {
+        return operations.map { operation ->
+            when (operation) {
+                is UIOperation.Click -> JsonUIOperation.Click(
+                    selector = convertUISelectorToJson(operation.selector),
+                    description = operation.description,
+                    relativeX = operation.relativeX,
+                    relativeY = operation.relativeY
+                )
+                is UIOperation.Input -> JsonUIOperation.Input(
+                    selector = convertUISelectorToJson(operation.selector),
+                    textVariableKey = operation.textVariableKey,
+                    description = operation.description
+                )
+                is UIOperation.LaunchApp -> JsonUIOperation.LaunchApp(
+                    packageName = operation.packageName,
+                    description = operation.description
+                )
+                is UIOperation.KillApp -> JsonUIOperation.LaunchApp(
+                    packageName = operation.packageName,
+                    description = operation.description
+                )
+                is UIOperation.PressKey -> JsonUIOperation.PressKey(
+                    keyCode = operation.keyCode,
+                    description = operation.description
+                )
+                is UIOperation.Wait -> JsonUIOperation.Wait(
+                    durationMs = operation.durationMs,
+                    description = operation.description
+                )
+                is UIOperation.WaitForPage -> JsonUIOperation.Wait(
+                    durationMs = operation.timeoutMs,
+                    description = operation.description
+                )
+                is UIOperation.Sequential -> JsonUIOperation.Sequential(
+                    operations = convertUIOperationsToJson(operation.operations),
+                    description = operation.description
+                )
+                is UIOperation.ValidateElement -> JsonUIOperation.ValidateElement(
+                    selector = convertUISelectorToJson(operation.selector),
+                    expectedValueKey = operation.expectedValueKey,
+                    validationType = operation.validationType.name,
+                    description = operation.description
+                )
+                is UIOperation.ValidateState -> JsonUIOperation.ValidateElement(
+                    selector = JsonUISelector(type = "ByText", value = "state"),
+                    expectedValueKey = "validated_state",
+                    validationType = "EXISTS",
+                    description = operation.description
+                )
+                is UIOperation.Swipe -> JsonUIOperation.Sequential(
+                    operations = emptyList(),
+                    description = operation.description
+                )
+                is UIOperation.NoOp -> JsonUIOperation.Wait(
+                    durationMs = 0,
+                    description = operation.description
+                )
+            }
+        }
+    }
+
+    /** 将UISelector转换为JsonUISelector */
+    private fun convertUISelectorToJson(selector: UISelector): JsonUISelector {
+        return when (selector) {
+            is UISelector.ByText -> JsonUISelector(
+                type = "ByText",
+                text = selector.text,
+                value = selector.text
+            )
+            is UISelector.ByResourceId -> JsonUISelector(
+                type = "ByResourceId",
+                id = selector.id,
+                value = selector.id
+            )
+            is UISelector.ByClassName -> JsonUISelector(
+                type = "ByClassName",
+                name = selector.name,
+                value = selector.name
+            )
+            is UISelector.ByContentDesc -> JsonUISelector(
+                type = "ByContentDescription",
+                desc = selector.desc,
+                value = selector.desc
+            )
+            is UISelector.ByBounds -> JsonUISelector(
+                type = "ByBounds",
+                bounds = selector.bounds,
+                value = selector.bounds
+            )
+            is UISelector.ByXPath -> JsonUISelector(
+                type = "ByXPath",
+                xpath = selector.xpath,
+                value = selector.xpath
+            )
+            is UISelector.Compound -> JsonUISelector(
+                type = "Compound",
+                selectors = selector.selectors.map { convertUISelectorToJson(it) },
+                operator = selector.operator
+            )
+        }
+    }
+
     /** 将UI路由配置转换为思维导图数据结构 */
     private fun convertUIRouteConfigToMindMap(config: JsonUIRouteConfig): Pair<List<MindMapNode>, List<MindMapConnection>> {
         val nodeMap = mutableMapOf<String, MindMapNode>()
@@ -783,11 +1023,17 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
             val toNode = nodeMap[edge.to]
             
             if (fromNode != null && toNode != null) {
+                // 提取操作信息
+                val operationInfo = extractOperationInfo(edge.operations)
+                
                 val connection = MindMapConnection(
                     id = "conn_${edge.from}_${edge.to}",
                     fromNodeId = fromNode.id,
                     toNodeId = toNode.id,
-                    label = if (edge.operations.isNotEmpty()) "操作" else "导航",
+                    label = operationInfo.label,
+                    actionType = operationInfo.actionType,
+                    targetElement = operationInfo.targetElement,
+                    condition = operationInfo.condition,
                     color = Color.Gray
                 )
                 connections.add(connection)
@@ -1001,7 +1247,7 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
                 if (rootNode.id !in visited) {
                     val tree = buildTreeFromNode(state, rootNode.id, visited)
                     val treeWidth = layoutTreeNode(tree, 0, currentForestX, positions, levelHeight, nodeSpacing)
-                    currentForestX = treeWidth + forestSpacing
+                    currentForestX += treeWidth + forestSpacing
                 }
             }
         }
@@ -1193,9 +1439,11 @@ class UIRouteViewModel(private val context: Context) : ViewModel() {
         val childPositions = mutableListOf<Float>()
         
         tree.children.forEach { child ->
-            val childCenterX = layoutTreeNode(child, level + 1, currentX, positions, levelHeight, nodeSpacing)
-            childPositions.add((currentX + childCenterX - nodeSpacing) / 2)
-            currentX = childCenterX
+            val childEndX = layoutTreeNode(child, level + 1, currentX, positions, levelHeight, nodeSpacing)
+            // 记录子节点的实际X位置
+            val childActualX = positions[child.nodeId]?.x ?: currentX
+            childPositions.add(childActualX)
+            currentX = childEndX
         }
         
         val nodeX = if (childPositions.isNotEmpty()) {
