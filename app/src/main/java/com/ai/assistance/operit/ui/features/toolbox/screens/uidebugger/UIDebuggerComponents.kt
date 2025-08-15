@@ -22,8 +22,6 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.FileDownload
-import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,11 +29,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.*
@@ -53,12 +46,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Popup
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.ai.assistance.operit.ui.features.toolbox.screens.uidebugger.UIDebuggerViewModel
-import com.ai.assistance.operit.ui.features.toolbox.screens.uidebugger.UIElement
 
 @Composable
 fun UIDebuggerOverlay(
@@ -98,40 +88,8 @@ fun UIDebuggerOverlay(
             )
         }
 
-        // Control buttons - 调整布局让最小化按钮更容易点击
+        // Control buttons
         Box(modifier = Modifier.fillMaxSize()) {
-            // Import/Export buttons - 新增在左侧
-            Column(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(16.dp)
-            ) {
-                // Import button
-                SmallFloatingActionButton(
-                    onClick = { viewModel.showImportDialog() },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.FileUpload,
-                        contentDescription = "导入配置",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-                
-                // Export button
-                SmallFloatingActionButton(
-                    onClick = { viewModel.showExportDialog() },
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.FileDownload,
-                        contentDescription = "导出配置",
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                }
-            }
-            
             // Minimize button (if callback provided) - 放在右下角，更大更显眼
             onMinimize?.let { minimizeCallback ->
                 FloatingActionButton(
@@ -149,7 +107,7 @@ fun UIDebuggerOverlay(
                 }
             }
             
-            // Close button - 放在右上角，更小避免误点
+            // Main action button - 放在右上角
             SmallFloatingActionButton(
                 onClick = {
                     if (isOverlayVisible) {
@@ -172,66 +130,46 @@ fun UIDebuggerOverlay(
             }
         }
 
-        // Import Export Dialogs
-        if (uiState.showImportDialog) {
-            ImportConfigDialog(
-                availableConfigs = uiState.availableConfigs,
-                isLoading = uiState.isImporting,
-                message = uiState.importExportMessage,
-                onDismiss = { viewModel.hideImportDialog() },
-                onImportFile = { filePath -> viewModel.importConfigFromFile(filePath) },
-                onClearMessage = { viewModel.clearImportExportMessage() }
-            )
-        }
-
-        if (uiState.showExportDialog) {
-            ExportConfigDialog(
-                isLoading = uiState.isExporting,
-                message = uiState.importExportMessage,
-                onDismiss = { viewModel.hideExportDialog() },
-                onExport = { appName, packageName, description ->
-                    viewModel.exportCurrentUIAsConfig(appName, packageName, description)
-                },
-                onClearMessage = { viewModel.clearImportExportMessage() }
-            )
-        }
-
-        // Success/Error Message
-        uiState.importExportMessage?.let { message ->
-            if (!uiState.showImportDialog && !uiState.showExportDialog) {
-                Card(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(16.dp)
-                        .zIndex(20f),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (message.contains("成功") || message.startsWith("Successfully")) 
-                            MaterialTheme.colorScheme.primaryContainer 
-                        else MaterialTheme.colorScheme.errorContainer
-                    )
+        // Action feedback message
+        if (uiState.showActionFeedback) {
+            Card(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+                    .zIndex(20f),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = message,
-                            modifier = Modifier.weight(1f),
-                            color = if (message.contains("成功") || message.startsWith("Successfully")) 
-                                MaterialTheme.colorScheme.onPrimaryContainer 
-                            else MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        IconButton(onClick = { viewModel.clearImportExportMessage() }) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "关闭",
-                                tint = if (message.contains("成功") || message.startsWith("Successfully")) 
-                                    MaterialTheme.colorScheme.onPrimaryContainer 
-                                else MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                    }
+                    Text(
+                        text = uiState.actionFeedbackMessage,
+                        modifier = Modifier.weight(1f),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 }
+            }
+        }
+
+        // Error message
+        uiState.errorMessage?.let { error ->
+            Card(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+                    .zIndex(20f),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Text(
+                    text = error,
+                    modifier = Modifier.padding(16.dp),
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
             }
         }
     }
@@ -390,197 +328,4 @@ fun ElementInfoPanel(
             }
         }
     }
-} 
-
-@Composable
-fun ImportConfigDialog(
-    availableConfigs: List<ImportableConfig>,
-    isLoading: Boolean,
-    message: String?,
-    onDismiss: () -> Unit,
-    onImportFile: (String) -> Unit,
-    onClearMessage: () -> Unit
-) {
-    var selectedFilePath by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("导入UI路由配置") },
-        text = {
-            Column {
-                Text("选择要导入的配置文件路径：")
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                TextField(
-                    value = selectedFilePath,
-                    onValueChange = { selectedFilePath = it },
-                    label = { Text("文件路径") },
-                    placeholder = { Text("/storage/emulated/0/config.json") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Text("可用配置:", style = MaterialTheme.typography.titleSmall)
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Column(
-                    modifier = Modifier
-                        .heightIn(max = 200.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    availableConfigs.forEach { config ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        ) {
-                            Column(modifier = Modifier.padding(8.dp)) {
-                                Text(
-                                    text = config.appName,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = config.packageName,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = config.description,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                Text(
-                                    text = if (config.isBuiltIn) "内置" else "用户导入",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (config.isBuiltIn) 
-                                        MaterialTheme.colorScheme.primary 
-                                    else MaterialTheme.colorScheme.secondary
-                                )
-                            }
-                        }
-                    }
-                }
-
-                message?.let {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = it,
-                        color = if (it.startsWith("Successfully")) 
-                            MaterialTheme.colorScheme.primary 
-                        else MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { 
-                    if (selectedFilePath.isNotEmpty()) {
-                        onImportFile(selectedFilePath)
-                    }
-                },
-                enabled = selectedFilePath.isNotEmpty() && !isLoading
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.width(16.dp))
-                } else {
-                    Text("导入")
-                }
-            }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        }
-    )
-}
-
-@Composable
-fun ExportConfigDialog(
-    isLoading: Boolean,
-    message: String?,
-    onDismiss: () -> Unit,
-    onExport: (String, String, String) -> Unit,
-    onClearMessage: () -> Unit
-) {
-    var appName by remember { mutableStateOf("") }
-    var packageName by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("导出UI路由配置") },
-        text = {
-            Column {
-                Text("输入应用信息以生成路由配置：")
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                TextField(
-                    value = appName,
-                    onValueChange = { appName = it },
-                    label = { Text("应用名称") },
-                    placeholder = { Text("微信") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                TextField(
-                    value = packageName,
-                    onValueChange = { packageName = it },
-                    label = { Text("包名") },
-                    placeholder = { Text("com.tencent.mm") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                TextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("描述") },
-                    placeholder = { Text("微信应用的UI自动化配置") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                message?.let {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = it,
-                        color = if (it.contains("成功")) 
-                            MaterialTheme.colorScheme.primary 
-                        else MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { 
-                    if (appName.isNotEmpty() && packageName.isNotEmpty()) {
-                        onExport(appName, packageName, description.ifEmpty { "${appName}的UI自动化配置" })
-                    }
-                },
-                enabled = appName.isNotEmpty() && packageName.isNotEmpty() && !isLoading
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.width(16.dp))
-                } else {
-                    Text("导出")
-                }
-            }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        }
-    )
 } 
