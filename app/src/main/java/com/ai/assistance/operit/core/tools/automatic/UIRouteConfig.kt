@@ -174,7 +174,7 @@ class UIRouteConfig {
                 "ByText" -> UISelector.ByText(jsonSelector.text ?: jsonSelector.value ?: throw IllegalArgumentException("ByText selector requires a 'text' or 'value' field."))
                 "ByResourceId" -> UISelector.ByResourceId(jsonSelector.id ?: jsonSelector.value ?: throw IllegalArgumentException("ByResourceId selector requires an 'id' or 'value' field."))
                 "ByClassName" -> UISelector.ByClassName(jsonSelector.name ?: jsonSelector.value ?: throw IllegalArgumentException("ByClassName selector requires a 'name' or 'value' field."))
-                "ByContentDescription" -> UISelector.ByContentDesc(jsonSelector.desc ?: jsonSelector.value ?: throw IllegalArgumentException("ByContentDescription selector requires a 'desc' or 'value' field."))
+                "ByContentDesc" -> UISelector.ByContentDesc(jsonSelector.desc ?: jsonSelector.value ?: throw IllegalArgumentException("ByContentDescription selector requires a 'desc' or 'value' field."))
                 "ByBounds" -> UISelector.ByBounds(jsonSelector.bounds ?: jsonSelector.value ?: throw IllegalArgumentException("ByBounds selector requires a 'bounds' or 'value' field."))
                 "ByXPath" -> UISelector.ByXPath(jsonSelector.xpath ?: jsonSelector.value ?: throw IllegalArgumentException("ByXPath selector requires an 'xpath' or 'value' field."))
                 "Compound" -> {
