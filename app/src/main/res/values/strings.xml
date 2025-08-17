@@ -824,7 +824,8 @@
     
     <!-- 模型提示词设置屏幕 -->
     <string name="model_prompts_title">提示词设置</string>
-    <string name="select_prompt_config">请选择提示词配置</string>
+    <string name="select_persona_config">选择AI助手的人设卡配置</string>
+    <string name="select_prompt_config">请选择系统提示词配置</string>
     <string name="create_new">新建</string>
     <string name="manage_all_prompts">管理所有提示词配置</string>
     <string name="custom_system_prompts">自定义系统提示词</string>
@@ -866,7 +867,7 @@
     
     <!-- 设置屏幕新增字符串 -->
     <string name="settings_prompt_section">提示词配置</string>
-    <string name="settings_prompt_title">提示词配置</string>
+    <string name="settings_prompt_title">提示词编辑</string>
     <string name="settings_prompt_desc">自定义AI助手的行为和性格的提示词</string>
     <string name="settings_configure_prompt">配置提示词</string>
     <string name="settings_functional_prompt_title">功能提示词配置</string>

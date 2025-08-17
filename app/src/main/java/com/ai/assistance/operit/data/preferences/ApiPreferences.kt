@@ -65,6 +65,8 @@ class ApiPreferences(private val context: Context) {
         
         // Custom System Prompt Template (Advanced Configuration)
         val CUSTOM_SYSTEM_PROMPT_TEMPLATE = stringPreferencesKey("custom_system_prompt_template")
+        // Selected System Prompt Profile Id for global usage
+        val CUSTOM_SYSTEM_PROMPT_PROFILE_ID = stringPreferencesKey("custom_system_prompt_profile_id")
 
         // DeepSeek Model Parameters - Keys for values
         val MAX_TOKENS = intPreferencesKey("max_tokens")
@@ -130,6 +132,8 @@ class ApiPreferences(private val context: Context) {
         
         // Default system prompt template (empty means use built-in template)
         const val DEFAULT_SYSTEM_PROMPT_TEMPLATE = ""
+        // Default selected system prompt profile id
+        const val DEFAULT_SYSTEM_PROMPT_PROFILE_ID = "default"
 
         // Default values for DeepSeek model parameters
         const val DEFAULT_MAX_TOKENS = 4096
@@ -334,6 +338,12 @@ class ApiPreferences(private val context: Context) {
             context.apiDataStore.data.map { preferences ->
                 preferences[CUSTOM_SYSTEM_PROMPT_TEMPLATE] ?: DEFAULT_SYSTEM_PROMPT_TEMPLATE
             }
+
+    // Selected Global System Prompt Profile Id Flow
+    val customSystemPromptProfileIdFlow: Flow<String> =
+        context.apiDataStore.data.map { preferences ->
+            preferences[CUSTOM_SYSTEM_PROMPT_PROFILE_ID] ?: DEFAULT_SYSTEM_PROMPT_PROFILE_ID
+        }
 
     // Flow for Custom Headers
     val customHeadersFlow: Flow<String> =
@@ -761,6 +771,13 @@ class ApiPreferences(private val context: Context) {
         }
     }
 
+    // Save selected global system prompt profile id
+    suspend fun saveCustomSystemPromptProfileId(profileId: String) {
+        context.apiDataStore.edit { preferences ->
+            preferences[CUSTOM_SYSTEM_PROMPT_PROFILE_ID] = profileId
+        }
+    }
+
     // Reset custom prompts to default values
     suspend fun resetCustomPrompts() {
         context.apiDataStore.edit { preferences ->
@@ -773,6 +790,13 @@ class ApiPreferences(private val context: Context) {
     suspend fun resetCustomSystemPromptTemplate() {
         context.apiDataStore.edit { preferences ->
             preferences[CUSTOM_SYSTEM_PROMPT_TEMPLATE] = DEFAULT_SYSTEM_PROMPT_TEMPLATE
+        }
+    }
+
+    // Reset selected global system prompt profile id to default
+    suspend fun resetCustomSystemPromptProfileId() {
+        context.apiDataStore.edit { preferences ->
+            preferences[CUSTOM_SYSTEM_PROMPT_PROFILE_ID] = DEFAULT_SYSTEM_PROMPT_PROFILE_ID
         }
     }
 

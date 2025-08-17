@@ -31,6 +31,8 @@ import com.ai.assistance.operit.core.config.SystemPromptConfig
 import com.ai.assistance.operit.data.model.PromptProfile
 import com.ai.assistance.operit.data.preferences.ApiPreferences
 import com.ai.assistance.operit.data.preferences.PromptPreferencesManager
+import com.ai.assistance.operit.data.preferences.SystemPromptPreferencesManager
+import com.ai.assistance.operit.data.model.SystemPromptProfile
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -44,6 +46,7 @@ fun ModelPromptsSettingsScreen(
     val context = LocalContext.current
     val apiPreferences = remember { ApiPreferences(context) }
     val promptPreferencesManager = remember { PromptPreferencesManager(context) }
+    val systemPromptPreferencesManager = remember { SystemPromptPreferencesManager(context) }
     val scope = rememberCoroutineScope()
     var showSaveSuccessMessage by remember { mutableStateOf(false) }
 
@@ -51,26 +54,33 @@ fun ModelPromptsSettingsScreen(
     val profileList =
             promptPreferencesManager.profileListFlow.collectAsState(initial = listOf("default"))
                     .value
+    val systemProfileList =
+            systemPromptPreferencesManager.profileListFlow.collectAsState(initial = listOf("default"))
+                    .value
 
     // 对话框状态
     var showAddProfileDialog by remember { mutableStateOf(false) }
     var newProfileName by remember { mutableStateOf("") }
+    var showAddSystemProfileDialog by remember { mutableStateOf(false) }
+    var newSystemProfileName by remember { mutableStateOf("") }
 
     // 选中的配置文件
     var selectedProfileId by remember { mutableStateOf(profileList.firstOrNull() ?: "default") }
     val selectedProfile = remember { mutableStateOf<PromptProfile?>(null) }
-
+    var selectedSystemProfileId by remember { mutableStateOf(systemProfileList.firstOrNull() ?: "default") }
+    val selectedSystemProfile = remember { mutableStateOf<SystemPromptProfile?>(null) }
     // 编辑状态
     var editMode by remember { mutableStateOf(false) }
 
     // 默认提示词
     val defaultIntroPrompt = promptPreferencesManager.defaultIntroPrompt
     val defaultTonePrompt = promptPreferencesManager.defaultTonePrompt
+    val defaultSystemPrompt = systemPromptPreferencesManager.defaultSystemPrompt
 
     // 编辑状态的提示词
     var introPromptInput by remember { mutableStateOf(defaultIntroPrompt) }
     var tonePromptInput by remember { mutableStateOf(defaultTonePrompt) }
-
+    var systemPromptInput by remember { mutableStateOf(defaultSystemPrompt) }
     // 高级配置状态
     var showAdvancedConfig by remember { mutableStateOf(false) }
     var systemPromptTemplateInput by remember { mutableStateOf("") }
@@ -80,9 +90,12 @@ fun ModelPromptsSettingsScreen(
 
     // 下拉菜单状态
     var isDropdownExpanded by remember { mutableStateOf(false) }
+    var isSystemDropdownExpanded by remember { mutableStateOf(false) }
 
     // 获取所有配置文件的名称映射(id -> name)
     val profileNameMap = remember { mutableStateMapOf<String, String>() }
+
+    val systemProfileNameMap = remember { mutableStateMapOf<String, String>() }
 
     // 加载所有配置文件名称
     LaunchedEffect(profileList) {
@@ -91,10 +104,16 @@ fun ModelPromptsSettingsScreen(
             profileNameMap[profileId] = profile.name
         }
     }
+    LaunchedEffect(systemProfileList) {
+        systemProfileList.forEach { profileId ->
+            val systemProfile = systemPromptPreferencesManager.getPromptProfileFlow(profileId).first()
+            systemProfileNameMap[profileId] = systemProfile.name
+        }
+    }
 
     // 初始化提示词配置
     LaunchedEffect(Unit) { promptPreferencesManager.initializeIfNeeded() }
-
+    LaunchedEffect(Unit) { systemPromptPreferencesManager.initializeIfNeeded() }
     // 加载选中的配置文件
     LaunchedEffect(selectedProfileId) {
         promptPreferencesManager.getPromptProfileFlow(selectedProfileId).collect { profile ->
@@ -104,13 +123,24 @@ fun ModelPromptsSettingsScreen(
             tonePromptInput = profile.tonePrompt
         }
     }
-
-    // 加载自定义系统提示模板
-    LaunchedEffect(Unit) {
-        apiPreferences.customSystemPromptTemplateFlow.collect { template ->
-            systemPromptTemplateInput = template
+    LaunchedEffect(selectedSystemProfileId) {
+        systemPromptPreferencesManager.getPromptProfileFlow(selectedSystemProfileId).collect { systemProfile ->
+            selectedSystemProfile.value = systemProfile
+            // 初始化编辑字段
+            systemPromptInput = systemProfile.systemPrompt
+            // 同步系统提示词模板输入框以随选择变更
+            systemPromptTemplateInput = systemProfile.systemPrompt
         }
     }
+
+    // 确保页面初始就从所选系统配置加载模板值
+    LaunchedEffect(Unit) {
+        // 读取当前选中ID对应的系统提示词并填充到编辑框
+        val profile = systemPromptPreferencesManager.getPromptProfileFlow(selectedSystemProfileId).first()
+        systemPromptTemplateInput = profile.systemPrompt
+    }
+
+    // 取消从 ApiPreferences 覆盖初始系统模板，保持以所选系统配置为准
 
     // 保存提示词函数
     fun savePrompts() {
@@ -128,6 +158,12 @@ fun ModelPromptsSettingsScreen(
                 if (showAdvancedConfig) {
                     apiPreferences.saveCustomSystemPromptTemplate(systemPromptTemplateInput)
                 }
+                
+                // 保存系统提示词到系统提示词数据库（与所选系统配置绑定）
+                systemPromptPreferencesManager.updatePromptProfile(
+                    profileId = selectedSystemProfileId,
+                    systemPrompt = systemPromptTemplateInput
+                )
                 
                 showSaveSuccessMessage = true
                 editMode = false
@@ -186,7 +222,7 @@ fun ModelPromptsSettingsScreen(
                         ) {
                             // 配置文件选择标签 - 更大的字体
                             Text(
-                                stringResource(R.string.select_prompt_config),
+                                stringResource(R.string.select_persona_config),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -204,18 +240,6 @@ fun ModelPromptsSettingsScreen(
                                     Text("提示词市场", fontSize = 12.sp)
                                 }
 
-                                // 高级配置切换按钮
-                                TextButton(
-                                    onClick = { showAdvancedConfig = !showAdvancedConfig },
-                                    modifier = Modifier.height(28.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                    colors = ButtonDefaults.textButtonColors(
-                                        contentColor = if (showAdvancedConfig) MaterialTheme.colorScheme.primary 
-                                                      else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                ) {
-                                    Text("高级配置", fontSize = 12.sp)
-                                }
 
                                 // 新建按钮 - 更小的尺寸
                                 OutlinedButton(
@@ -365,7 +389,6 @@ fun ModelPromptsSettingsScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
 
                 // 提示词详情
                 AnimatedVisibility(
@@ -450,15 +473,253 @@ fun ModelPromptsSettingsScreen(
                                     enabled = editMode
                                 )
 
+                                
+
+                                if (editMode) {
+                                    Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.End
+                                    ) {
+                                        TextButton(
+                                            onClick = {
+                                                introPromptInput = defaultIntroPrompt
+                                                tonePromptInput = defaultTonePrompt
+                                                if (showAdvancedConfig) {
+                                                    systemPromptTemplateInput = ""
+                                                }
+                                            }
+                                        ) { Text(stringResource(R.string.restore_default_prompts)) }
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        Button(
+                                            onClick = {
+                                                savePrompts()
+                                            }
+                                        ) { Text(stringResource(R.string.save_prompts)) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // 配置文件选择区域 - 卡片内的布局重新组织
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    border = BorderStroke(0.7.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        
+                        // 配置选择器区 - 标签和新建按钮放在一行
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // 配置文件选择标签 - 更大的字体
+                            Text(
+                                stringResource(R.string.select_prompt_config),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                TextButton(
+                                    onClick = onNavigateToMarket,
+                                    modifier = Modifier.height(28.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text("提示词市场", fontSize = 12.sp)
+                                }
+
+                                // 新建按钮 - 更小的尺寸（系统提示词）
+                                OutlinedButton(
+                                    onClick = { showAddSystemProfileDialog = true },
+                                    shape = RoundedCornerShape(16.dp),
+                                    border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.primary),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(28.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.primary
+                                    )
+                                ) {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text(
+                                        stringResource(R.string.create_new),
+                                        fontSize = 12.sp,
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+                        }
+                        
+                        val selectedProfileName = systemProfileNameMap[selectedSystemProfileId] ?: stringResource(R.string.unnamed_config)
+                        
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isSystemDropdownExpanded = true },
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            tonalElevation = 0.5.dp,
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp, horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = selectedProfileName,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Normal,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                
+                                AnimatedContent(
+                                    targetState = isSystemDropdownExpanded,
+                                    transitionSpec = {
+                                        fadeIn() + scaleIn() with fadeOut() + scaleOut()
+                                    }
+                                ) { expanded ->
+                                    Icon(
+                                        if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = stringResource(R.string.select_model),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        
+                        // 操作按钮
+                        Row(
+                            modifier = Modifier.padding(top = 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            // 删除按钮
+                            if (selectedSystemProfileId != "default") {
+                                TextButton(
+                                    onClick = {
+                                        scope.launch {
+                                            systemPromptPreferencesManager.deleteProfile(selectedSystemProfileId)
+                                            selectedSystemProfileId = systemProfileList.firstOrNull { it != selectedSystemProfileId } ?: "default"
+                                        }
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 12.dp),
+                                    colors = ButtonDefaults.textButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.error
+                                    ),
+                                    modifier = Modifier.height(36.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(stringResource(R.string.delete_config), fontSize = 14.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    // 下拉菜单
+                    DropdownMenu(
+                        expanded = isSystemDropdownExpanded,
+                        onDismissRequest = { isSystemDropdownExpanded = false },
+                        modifier = Modifier.width(280.dp),
+                        properties = PopupProperties(focusable = true)
+                    ) {
+                        systemProfileList.forEach { profileId ->
+                            val profileName = systemProfileNameMap[profileId] ?: stringResource(R.string.unnamed_config)
+                            val isSelected = profileId == selectedSystemProfileId
+                            
+                            DropdownMenuItem(
+                                text = { 
+                                    Text(
+                                        text = profileName,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                },
+                                leadingIcon = null,
+                                trailingIcon = if (isSelected) { {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .background(MaterialTheme.colorScheme.primary, CircleShape)
+                                    )
+                                }} else null,
+                                onClick = {
+                                    selectedSystemProfileId = profileId
+                                    isSystemDropdownExpanded = false
+                                    editMode = false
+                                },
+                                colors = MenuDefaults.itemColors(
+                                    textColor = if (isSelected) MaterialTheme.colorScheme.primary 
+                                              else MaterialTheme.colorScheme.onSurface
+                                ),
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            )
+                            
+                            if (profileId != systemProfileList.last()) {
+                                Divider(modifier = Modifier.padding(horizontal = 8.dp), thickness = 0.5.dp)
+                            }
+                        }
+                    }
+                }
+
+                // 提示词详情
+                AnimatedVisibility(
+                    visible = selectedSystemProfile.value != null,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    val systemProfile = selectedSystemProfile.value
+                    if (systemProfile != null) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                                colors =
+                                        CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                                
+
                                 // 高级配置区域
                                 AnimatedVisibility(
-                                    visible = showAdvancedConfig,
+                                    visible = true,
                                     enter = fadeIn() + expandVertically(),
                                     exit = fadeOut() + shrinkVertically()
                                 ) {
                                     Column(modifier = Modifier.fillMaxWidth()) {
                                         Divider(
-                                            modifier = Modifier.padding(vertical = 16.dp),
+                                            modifier = Modifier.padding(bottom = 4.dp),
                                             color = MaterialTheme.colorScheme.outlineVariant.copy(0.3f)
                                         )
 
@@ -754,6 +1015,69 @@ fun ModelPromptsSettingsScreen(
                     onClick = {
                         showAddProfileDialog = false
                         newProfileName = ""
+                    }
+                ) { Text(stringResource(R.string.cancel), fontSize = 13.sp) }
+            },
+            shape = RoundedCornerShape(12.dp)
+        )
+    }
+
+    // 新建系统提示词配置文件对话框
+    if (showAddSystemProfileDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showAddSystemProfileDialog = false
+                newSystemProfileName = ""
+            },
+            title = {
+                Text(
+                    stringResource(R.string.new_prompt_config_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        stringResource(R.string.new_prompt_config_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newSystemProfileName,
+                        onValueChange = { newSystemProfileName = it },
+                        label = { Text(stringResource(R.string.config_name), fontSize = 12.sp) },
+                        placeholder = { Text(stringResource(R.string.config_name_placeholder), fontSize = 12.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newSystemProfileName.isNotBlank()) {
+                            scope.launch {
+                                val profileId =
+                                    systemPromptPreferencesManager.createProfile(
+                                        newSystemProfileName
+                                    )
+                                selectedSystemProfileId = profileId
+                                showAddSystemProfileDialog = false
+                                newSystemProfileName = ""
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                ) { Text(stringResource(R.string.create), fontSize = 13.sp) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showAddSystemProfileDialog = false
+                        newSystemProfileName = ""
                     }
                 ) { Text(stringResource(R.string.cancel), fontSize = 13.sp) }
             },

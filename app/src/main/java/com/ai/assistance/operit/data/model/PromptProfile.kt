@@ -10,4 +10,12 @@ data class PromptProfile(
     val tonePrompt: String,
     val isActive: Boolean = false,
     val isDefault: Boolean = false
+)
+
+data class SystemPromptProfile(
+    val id: String,
+    val name: String,
+    val systemPrompt: String,
+    val isActive: Boolean = false,
+    val isDefault: Boolean = false
 ) 

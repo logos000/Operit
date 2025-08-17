@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -24,10 +25,13 @@ import com.ai.assistance.operit.data.model.PromptProfile
 import com.ai.assistance.operit.data.preferences.FunctionalPromptManager
 import com.ai.assistance.operit.data.preferences.PromptFunctionType
 import com.ai.assistance.operit.data.preferences.PromptPreferencesManager
+import com.ai.assistance.operit.data.preferences.SystemPromptPreferencesManager
+import com.ai.assistance.operit.data.preferences.ApiPreferences
+import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun FunctionalPromptConfigScreen(
         onBackPressed: () -> Unit = {},
@@ -35,6 +39,29 @@ fun FunctionalPromptConfigScreen(
 ) {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
+        val apiPreferences = remember { ApiPreferences(context) }
+        val customSystemPromptTemplate = apiPreferences.customSystemPromptTemplateFlow.collectAsState(initial = "").value
+        val persistedSystemProfileId = apiPreferences.customSystemPromptProfileIdFlow.collectAsState(initial = "default").value
+        val systemPromptPreferencesManager = remember { SystemPromptPreferencesManager(context) }
+        val systemProfileList = systemPromptPreferencesManager.profileListFlow.collectAsState(initial = listOf("default")).value
+        var isGlobalSystemDropdownExpanded by remember { mutableStateOf(false) }
+        var selectedGlobalSystemProfileId by remember { mutableStateOf(systemProfileList.firstOrNull() ?: persistedSystemProfileId) }
+        val systemProfileNameMap = remember { mutableStateMapOf<String, String>() }
+
+        LaunchedEffect(Unit) { systemPromptPreferencesManager.initializeIfNeeded() }
+        LaunchedEffect(systemProfileList, persistedSystemProfileId) {
+                systemProfileNameMap.clear()
+                for (profileId in systemProfileList) {
+                        val profile = systemPromptPreferencesManager.getPromptProfileFlow(profileId).first()
+                        systemProfileNameMap[profileId] = profile.name
+                }
+                // 若当前选中不在列表中，重置为第一个
+                selectedGlobalSystemProfileId = if (systemProfileList.contains(persistedSystemProfileId)) {
+                        persistedSystemProfileId
+                } else {
+                        systemProfileList.firstOrNull() ?: "default"
+                }
+        }
 
         // 配置管理器
         val functionalPromptManager = remember { FunctionalPromptManager(context) }
@@ -203,6 +230,102 @@ fun FunctionalPromptConfigScreen(
                                         }
 
                                         Spacer(modifier = Modifier.height(8.dp))
+                                }
+
+                                // 全局系统提示词卡片（置于功能列表之前）
+                                item {
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                    ) {
+                                        Column(modifier = Modifier.padding(16.dp)) {
+                                            Text(
+                                                text = "全局系统提示词",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            // 选择器（与其它卡片一致的下拉样式）
+                                            val selectedName = systemProfileNameMap[selectedGlobalSystemProfileId] ?: stringResource(R.string.unnamed_config)
+                                            Surface(
+                                                modifier = Modifier.fillMaxWidth().clickable { isGlobalSystemDropdownExpanded = true },
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Text(
+                                                        text = selectedName,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                    AnimatedContent(
+                                                        targetState = isGlobalSystemDropdownExpanded,
+                                                        transitionSpec = { fadeIn() + scaleIn() with fadeOut() + scaleOut() }
+                                                    ) { expanded ->
+                                                        Icon(
+                                                            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                            contentDescription = stringResource(R.string.select_prompt_config_title),
+                                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            DropdownMenu(
+                                                expanded = isGlobalSystemDropdownExpanded,
+                                                onDismissRequest = { isGlobalSystemDropdownExpanded = false },
+                                                modifier = Modifier.width(280.dp),
+                                                properties = PopupProperties(focusable = true)
+                                            ) {
+                                                systemProfileList.forEach { profileId ->
+                                                    val profileName = systemProfileNameMap[profileId] ?: stringResource(R.string.unnamed_config)
+                                                    val isSelected = profileId == selectedGlobalSystemProfileId
+                                                    DropdownMenuItem(
+                                                        text = {
+                                                            Text(
+                                                                text = profileName,
+                                                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                            )
+                                                        },
+                                                        leadingIcon = null,
+                                                        trailingIcon = if (isSelected) { {
+                                                            Box(
+                                                                modifier = Modifier.size(8.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(50))
+                                                            )
+                                                        } } else null,
+                                                        onClick = {
+                                                            selectedGlobalSystemProfileId = profileId
+                                                            isGlobalSystemDropdownExpanded = false
+                                                            scope.launch {
+                                                                val p = systemPromptPreferencesManager.getPromptProfileFlow(profileId).first()
+                                                                apiPreferences.saveCustomSystemPromptTemplate(p.systemPrompt)
+                                                                apiPreferences.saveCustomSystemPromptProfileId(profileId)
+                                                                // 复用保存提示
+                                                                showSaveSuccess = true
+                                                            }
+                                                        },
+                                                        colors = MenuDefaults.itemColors(
+                                                            textColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                        ),
+                                                        modifier = Modifier.padding(horizontal = 4.dp)
+                                                    )
+
+                                                    if (profileId != systemProfileList.last()) {
+                                                        Divider(modifier = Modifier.padding(horizontal = 8.dp), thickness = 0.5.dp)
+                                                    }
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                        }
+                                    }
                                 }
 
                                 // 功能类型列表

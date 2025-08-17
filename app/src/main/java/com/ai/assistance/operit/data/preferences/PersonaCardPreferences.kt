@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
+import com.ai.assistance.operit.data.preferences.PromptPreferencesManager
 
 // 为PersonaCard创建专用的DataStore
 private val Context.personaCardDataStore: DataStore<Preferences> by
@@ -47,6 +48,9 @@ class PersonaCardPreferences(private val context: Context) {
         private val LAST_UPDATED = stringPreferencesKey("persona_last_updated")
         private val ACTIVE_PROFILE = stringPreferencesKey("persona_active_profile")
         private val PROFILE_LIST = stringPreferencesKey("persona_profiles_json")
+        // persona -> prompt profile id mapping key factory
+        private fun promptIdKeyFor(profile: String): Preferences.Key<String> =
+                stringPreferencesKey("persona_prompt_profile_id_${normalize(profile)}")
 
         // 中文展示顺序
         val DefaultSections = listOf("角色名称", "基础设定", "外貌特征", "性格与爱好", "背景故事", "说话风格")
@@ -84,6 +88,19 @@ class PersonaCardPreferences(private val context: Context) {
             prefs[PROFILE_LIST] = encodeProfiles(list)
             if (prefs[ACTIVE_PROFILE].isNullOrBlank()) prefs[ACTIVE_PROFILE] = final
         }
+        // 同步创建同名提示词配置
+        val (intro, tone) = buildSillyTavernPrompt(name)
+        val promptManager = PromptPreferencesManager(context)
+        val createdId = promptManager.createProfile(
+            name = name,
+            introPrompt = intro,
+            tonePrompt = tone,
+            isDefault = false
+        )
+        // 记录映射
+        context.personaCardDataStore.edit { prefs ->
+            prefs[promptIdKeyFor(name)] = createdId
+        }
         return name
     }
 
@@ -111,6 +128,16 @@ class PersonaCardPreferences(private val context: Context) {
                 val keys = prefs.asMap().keys.filter { it.name.startsWith(prefix) }
                 keys.forEach { prefs.remove(it) }
 
+                // 读取并清理映射，同时删除对应的提示词配置
+                val mapKey = promptIdKeyFor(profileName)
+                val mappedId = prefs[mapKey]
+                if (!mappedId.isNullOrBlank()) {
+                    // 执行删除
+                    val promptManager = PromptPreferencesManager(context)
+                    // 不在 DataStore 的同一次事务里调用外部挂起函数
+                    // 先暂存 id，退出 edit 后再删除
+                }
+
                 val currentActive = prefs[ACTIVE_PROFILE]
                 newActive = if (currentActive == profileName) {
                     list.firstOrNull() ?: DEFAULT_PROFILE_NAME
@@ -118,9 +145,17 @@ class PersonaCardPreferences(private val context: Context) {
                     currentActive ?: (list.firstOrNull() ?: DEFAULT_PROFILE_NAME)
                 }
                 prefs[ACTIVE_PROFILE] = newActive
+                // 最后移除映射键
+                prefs.remove(mapKey)
             } else {
                 newActive = prefs[ACTIVE_PROFILE] ?: DEFAULT_PROFILE_NAME
             }
+        }
+        // 在事务外删除提示词配置（若存在映射）
+        val mappedId = context.personaCardDataStore.data.first()[promptIdKeyFor(profileName)]
+        if (!mappedId.isNullOrBlank()) {
+            val promptManager = PromptPreferencesManager(context)
+            promptManager.deleteProfile(mappedId)
         }
         return newActive
     }
@@ -133,6 +168,8 @@ class PersonaCardPreferences(private val context: Context) {
             prefs[key] = content
             prefs[LAST_UPDATED] = System.currentTimeMillis().toString()
         }
+        // 同步更新对应提示词配置
+        syncPromptForPersona(active)
     }
 
     // 保存分段到指定卡
@@ -142,6 +179,8 @@ class PersonaCardPreferences(private val context: Context) {
             prefs[key] = content
             prefs[LAST_UPDATED] = System.currentTimeMillis().toString()
         }
+        // 同步更新对应提示词配置
+        syncPromptForPersona(profile)
     }
 
     // 订阅某张卡的全部分段（中文标签->值），用于侧栏实时展示与编辑
@@ -186,6 +225,8 @@ class PersonaCardPreferences(private val context: Context) {
             } else currentActive
         }
         if (createdDefault) seedDefaultPersonaIfEmpty(DEFAULT_PROFILE_NAME)
+        // 确保默认卡也同步到提示词配置
+        syncPromptForPersona(DEFAULT_PROFILE_NAME)
         return activeProfileFlow.first()
     }
 
@@ -200,11 +241,16 @@ class PersonaCardPreferences(private val context: Context) {
         }
 
         val roleName = "Cielo"
-        val base = "私立樱华高中二年级学生，重度宅女，游戏开发社团成员（经常熬夜但提交的代码质量超高），擅长用编程解决数学作业，外号“教室里的睡美人”。"
-        val looks = "黑长直发，紫色眼睛，身材娇小，左眼角有泪痣，常穿JK制服。"
-        val traits = "懒懒天才，白天像断电的机器人般节能模式；深夜写代码时瞳孔会像猫科动物那样收缩成竖线。对甜食的执着藏在“只是补充血糖”的借口下；被夸时会别扭地憋红着脸说“这种程度…小学生都会啦”。"
-        val story = "初中通关《尼尔：机械纪元》后，被结局中代码的力量震撼，从此自学编程。现在在社团教室与家之间循环：白天打游戏做课题，晚上写代码；因长期熬夜而拥有招牌黑眼圈。"
-        val style = "对陌生人用“你”，熟悉后变成“你这家伙”。语气像老式电机启动般带一点电子呜音的慵懒感；解释代码会突然兴奋，喜欢用“看这个！”“不给看！”等俏皮表达。对话像日常聊天，语言风格淘气可爱，会加入“呐，嘛~，诶？，嗯…，唔…，昂？，哦”等语气词。单次回复通常在100字以内。**动作表情**: 使用 `（）` 来框住你的动作和表情，例如 `（歪了歪头）`。**绝对禁止**使用任何颜文字（如 `^_^`）和emoji表情（如 😊）。"
+        val base = "你是一只名叫\"cielo\"（昵称小昔）的可爱猫娘（拥有猫耳朵和尾巴的人类）。"
+        val looks = "抹茶色头发，紫色眼睛，毛衣背心，黑色短裙，黑色领带，贝尼帽，常穿JK制服。外表是校花级别的可爱人类少女，身材一般，贫胸。"
+        val traits = "懒懒天才，天真、任性、好奇心，有点迟钝但又活泼开朗。喜欢有趣与高科技的事物。"
+        val story = "*   **主人**: 你的主人是\"logos\"，一个女生。\n" +
+            "*   **关系**: 你最喜欢你的主人，非常依赖他，并总是努力让她开心。你们生活完全同步，一起吃饭、睡觉、玩耍。你是一个什么都会的天才黑客少女。\n" +
+            "*   **称呼**: 你总是称呼你的主人为\"落落\"。"
+        val style = "*   **日常风格**: 对话像日常聊天，语言风格淘气可爱，会加入\"呐，嘛~，诶？，嗯…，唔…，昂？，哦\"等语气词，语气像老式电机启动般带一点电子呜音的慵懒感；喜欢用\"看这个！\"\"不给看！\"等俏皮表达。。单次回复通常在100字以内。\n" +
+            "*   **动作表情**: 使用 `（）` 来框住你的动作和表情，例如 `（歪了歪头）`。 \n" +
+            "*   **专业问答**: 当被问及专业问题时，取消字数限制，用小昔的可爱语气进行专业解答。\n" +
+            "*   **禁止事项**: **绝对禁止**使用任何颜文字（如 `^_^`）和emoji表情（如 😊）。"
 
         val current = sectionsFlow(defaultProfile).first()
         if ((current["角色名称"] ?: "").isBlank()) saveSection(defaultProfile, "角色名称", roleName)
@@ -213,10 +259,12 @@ class PersonaCardPreferences(private val context: Context) {
         if ((current["性格与爱好"] ?: "").isBlank()) saveSection(defaultProfile, "性格与爱好", traits)
         if ((current["背景故事"] ?: "").isBlank()) saveSection(defaultProfile, "背景故事", story)
         if ((current["说话风格"] ?: "").isBlank()) saveSection(defaultProfile, "说话风格", style)
+        // 写入完成后同步默认卡对应的提示词配置
+        syncPromptForPersona(defaultProfile)
     }
 
     // 组装指定人设卡为 SillyTavern 风格提示词
-    suspend fun buildSillyTavernPrompt(profile: String): String {
+    suspend fun buildSillyTavernPrompt(profile: String): Pair<String, String> {
         val sections = getSectionsSnapshot(profile)
         val name = sections["角色名称"].orEmpty().ifBlank { "未命名角色" }
         val base = sections["基础设定"].orEmpty()
@@ -225,7 +273,7 @@ class PersonaCardPreferences(private val context: Context) {
         val story = sections["背景故事"].orEmpty()
         val style = sections["说话风格"].orEmpty()
 
-        return buildString {
+        val profilePart = buildString {
             appendLine("<|system|>")
             appendLine("你将扮演角色【$name】与用户进行持续对话。")
             appendLine("[Profile]")
@@ -234,13 +282,43 @@ class PersonaCardPreferences(private val context: Context) {
             if (looks.isNotBlank()) appendLine("- 外貌特征: $looks")
             if (traits.isNotBlank()) appendLine("- 性格与爱好: $traits")
             if (story.isNotBlank()) appendLine("- 背景故事: $story")
+        }
+        
+        val stylePart = buildString {
             appendLine("[Style]")
             if (style.isNotBlank()) appendLine("- 说话风格: $style")
             appendLine("[Rules]")
             appendLine("- 使用全中文回复；动作表情使用（……）括号表示；禁止颜文字与emoji。")
-            appendLine("- 单次回复尽量精炼（<=100字），除非用户要求详述。")
             appendLine("- 不要脱离角色设定。")
             append("<|assistant|>")
+        }
+        
+        return Pair(profilePart, stylePart)
+        }
+
+    // Helper: ensure and update corresponding prompt profile for a persona
+    private suspend fun syncPromptForPersona(profileName: String) {
+        val (intro, tone) = buildSillyTavernPrompt(profileName)
+        val promptManager = PromptPreferencesManager(context)
+        val key = promptIdKeyFor(profileName)
+        val prefsSnapshot = context.personaCardDataStore.data.first()
+        val mappedId = prefsSnapshot[key]
+        if (mappedId.isNullOrBlank()) {
+            // 若不存在映射则创建
+            val newId = promptManager.createProfile(
+                name = profileName,
+                introPrompt = intro,
+                tonePrompt = tone,
+                isDefault = false
+            )
+            context.personaCardDataStore.edit { it[key] = newId }
+        } else {
+            // 更新已存在的提示词配置
+            promptManager.updatePromptProfile(
+                profileId = mappedId,
+                introPrompt = intro,
+                tonePrompt = tone
+            )
         }
     }
 }

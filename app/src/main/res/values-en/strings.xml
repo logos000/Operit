@@ -813,7 +813,8 @@
     
     <!-- Model Prompts Settings Screen -->
     <string name="model_prompts_title">Prompt Settings</string>
-    <string name="select_prompt_config">Select Prompt Configuration</string>
+    <string name="select_persona_config">Select AI Assistant Persona Card Configuration</string>
+    <string name="select_prompt_config">Select System Prompt Configuration</string>
     <string name="create_new">New</string>
     <string name="manage_all_prompts">Manage All Prompt Configurations</string>
     <string name="custom_system_prompts">Custom System Prompts</string>
@@ -855,7 +856,7 @@
     
     <!-- Settings Screen Additional Strings -->
     <string name="settings_prompt_section">Prompt Configuration</string>
-    <string name="settings_prompt_title">Prompt Configuration</string>
+    <string name="settings_prompt_title">Prompt Editor</string>
     <string name="settings_prompt_desc">Customize AI assistant behavior and personality prompts</string>
     <string name="settings_configure_prompt">Configure Prompts</string>
     <string name="settings_functional_prompt_title">Functional Prompt Configuration</string>
