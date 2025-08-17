@@ -67,13 +67,11 @@ fun UIDebuggerScreen(
                     operitDir.mkdirs()
                 }
                 // 此API级别 26+
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    val operitDirUri = DocumentsContract.buildDocumentUri(
-                        "com.android.externalstorage.documents",
-                        "primary:" + Environment.DIRECTORY_DOWNLOADS + "/Operit"
-                    )
-                    intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, operitDirUri)
-                }
+                val operitDirUri = DocumentsContract.buildDocumentUri(
+                    "com.android.externalstorage.documents",
+                    "primary:" + Environment.DIRECTORY_DOWNLOADS + "/Operit"
+                )
+                intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, operitDirUri)
                 return intent
             }
         }
