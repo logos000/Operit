@@ -728,6 +728,8 @@ class UIDebuggerViewModel : ViewModel() {
             "ByText" -> UISelector.ByText(selectorValue)
             "ByContentDesc" -> UISelector.ByContentDesc(selectorValue)
             "ByClassName" -> UISelector.ByClassName(selectorValue)
+            "ByBounds" -> UISelector.ByBounds(selectorValue)
+            "ByXPath" -> UISelector.ByXPath(selectorValue)
             else -> UISelector.ByText(selectorValue)
         }
         return UIOperation.Click(selector, description)
@@ -742,6 +744,8 @@ class UIDebuggerViewModel : ViewModel() {
             "ByText" -> UISelector.ByText(selectorValue)
             "ByContentDesc" -> UISelector.ByContentDesc(selectorValue)
             "ByClassName" -> UISelector.ByClassName(selectorValue)
+            "ByBounds" -> UISelector.ByBounds(selectorValue)
+            "ByXPath" -> UISelector.ByXPath(selectorValue)
             else -> UISelector.ByText(selectorValue)
         }
         return UIOperation.Input(selector, textVariableKey)

@@ -458,12 +458,12 @@ class AutomationPackageManager private constructor(private val context: Context)
      */
     private fun convertToJsonSelector(selector: UISelector): JsonUISelector {
         return when (selector) {
-            is UISelector.ByResourceId -> JsonUISelector(type = "ByResourceId", id = selector.id)
-            is UISelector.ByText -> JsonUISelector(type = "ByText", text = selector.text)
-            is UISelector.ByContentDesc -> JsonUISelector(type = "ByContentDesc", desc = selector.desc)
-            is UISelector.ByClassName -> JsonUISelector(type = "ByClassName", name = selector.name)
-            is UISelector.ByBounds -> JsonUISelector(type = "ByBounds", bounds = selector.bounds)
-            is UISelector.ByXPath -> JsonUISelector(type = "ByXPath", xpath = selector.xpath)
+            is UISelector.ByResourceId -> JsonUISelector(type = "ByResourceId", value = selector.id)
+            is UISelector.ByText -> JsonUISelector(type = "ByText", value = selector.text)
+            is UISelector.ByContentDesc -> JsonUISelector(type = "ByContentDesc", value = selector.desc)
+            is UISelector.ByClassName -> JsonUISelector(type = "ByClassName", value = selector.name)
+            is UISelector.ByBounds -> JsonUISelector(type = "ByBounds", value = selector.bounds)
+            is UISelector.ByXPath -> JsonUISelector(type = "ByXPath", value = selector.xpath)
             is UISelector.Compound -> JsonUISelector(
                 type = "Compound",
                 selectors = selector.selectors.map { convertToJsonSelector(it) },

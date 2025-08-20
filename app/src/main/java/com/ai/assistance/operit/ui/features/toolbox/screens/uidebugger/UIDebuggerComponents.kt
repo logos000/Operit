@@ -1352,8 +1352,10 @@ fun getSelectorTypeName(selector: UISelector?): String {
         is UISelector.ByText -> "ByText"
         is UISelector.ByContentDesc -> "ByContentDesc"
         is UISelector.ByClassName -> "ByClassName"
+        is UISelector.ByBounds -> "ByBounds"
+        is UISelector.ByXPath -> "ByXPath"
         is UISelector.Compound -> "Compound"
-        else -> "ByText"
+        else -> "Unknown"
     }
 }
 
@@ -1363,6 +1365,9 @@ fun getSelectorValue(selector: UISelector?): String {
         is UISelector.ByText -> selector.text
         is UISelector.ByContentDesc -> selector.desc
         is UISelector.ByClassName -> selector.name
+        is UISelector.ByBounds -> selector.bounds
+        is UISelector.ByXPath -> selector.xpath
+        is UISelector.Compound -> "..."
         else -> ""
     }
 }
