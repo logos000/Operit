@@ -12,6 +12,8 @@ import com.ai.assistance.operit.core.tools.automatic.config.AutomationPackageMan
 import com.ai.assistance.operit.core.tools.automatic.UIRouteConfig
 import com.ai.assistance.operit.core.tools.automatic.config.AutomationPackageInfo
 import com.ai.assistance.operit.data.model.AITool
+import com.ai.assistance.operit.core.tools.system.action.ActionListener
+import com.ai.assistance.operit.core.tools.system.action.ActionListenerFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +40,9 @@ class UIDebuggerViewModel : ViewModel() {
     private val TAG = "UIDebuggerViewModel"
     private var windowInteractionController: ((Boolean) -> Unit)? = null
     private lateinit var context: Context
+    
+    // Activity监听相关
+    private var currentActionListener: ActionListener? = null
 
     /**
      * 设置窗口交互控制器
@@ -736,5 +741,143 @@ class UIDebuggerViewModel : ViewModel() {
             bounds = bounds,
             isClickable = node.isClickable
         )
+    }
+
+    // Activity监听相关方法
+
+    /**
+     * 启动Activity监听
+     */
+    fun startActivityListening() {
+        viewModelScope.launch {
+            try {
+                // 如果已经在监听，直接返回
+                if (_uiState.value.isActivityListening && currentActionListener != null) {
+                    showActionFeedback("监听已在运行中")
+                    return@launch
+                }
+
+                // 先停止现有的监听器，避免重复监听
+                currentActionListener?.let { existingListener ->
+                    existingListener.stopListening()
+                    currentActionListener = null
+                }
+
+                val (listener, status) = ActionListenerFactory.getHighestAvailableListener(context)
+                
+                if (!status.granted) {
+                    showActionFeedback("权限不足: ${status.reason}")
+                    return@launch
+                }
+
+                currentActionListener = listener
+                val result = listener.startListening { event ->
+                    // 处理监听到的事件
+                    handleActionEvent(event)
+                }
+
+                if (result.success) {
+                    _uiState.update { 
+                        it.copy(
+                            isActivityListening = true,
+                            showActivityMonitor = true,
+                            activityEvents = emptyList() // 清空之前的事件
+                        ) 
+                    }
+                    showActionFeedback("Activity监听已启动")
+                } else {
+                    showActionFeedback("启动监听失败: ${result.message}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "启动Activity监听失败", e)
+                showActionFeedback("启动监听失败: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * 停止Activity监听
+     */
+    fun stopActivityListening() {
+        viewModelScope.launch {
+            try {
+                val stopped = currentActionListener?.stopListening() ?: false
+                if (stopped) {
+                    _uiState.update { 
+                        it.copy(
+                            isActivityListening = false
+                        ) 
+                    }
+                    showActionFeedback("Activity监听已停止")
+                } else {
+                    showActionFeedback("停止监听失败")
+                }
+                currentActionListener = null
+            } catch (e: Exception) {
+                Log.e(TAG, "停止Activity监听失败", e)
+                showActionFeedback("停止监听失败: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * 切换Activity监听显示状态
+     */
+    fun toggleActivityMonitor() {
+        _uiState.update { it.copy(showActivityMonitor = !it.showActivityMonitor) }
+    }
+
+    /**
+     * 清除Activity事件记录
+     */
+    fun clearActivityEvents() {
+        _uiState.update { 
+            it.copy(
+                activityEvents = emptyList(),
+                currentActivityName = null
+            ) 
+        }
+    }
+
+    /**
+     * 处理监听到的Action事件
+     */
+    private fun handleActionEvent(event: ActionListener.ActionEvent) {
+        viewModelScope.launch {
+            // 过滤掉自己软件的事件
+            val currentPackageName = context.packageName
+            if (event.elementInfo?.packageName == currentPackageName) {
+                return@launch
+            }
+            
+            _uiState.update { state ->
+                val newEvents = (state.activityEvents + event).takeLast(100) // 保留最近100个事件
+                
+                // 更新当前活动名称
+                val currentActivity = event.elementInfo?.let { elementInfo ->
+                    if (elementInfo.packageName != null && elementInfo.className != null) {
+                        "${elementInfo.packageName}/${elementInfo.className}"
+                    } else {
+                        elementInfo.packageName
+                    }
+                }
+                
+                state.copy(
+                    activityEvents = newEvents,
+                    currentActivityName = currentActivity ?: state.currentActivityName
+                )
+            }
+        }
+    }
+
+    /**
+     * ViewModel清理时停止监听
+     */
+    override fun onCleared() {
+        super.onCleared()
+        viewModelScope.launch {
+            currentActionListener?.stopListening()
+            currentActionListener = null
+        }
     }
 }

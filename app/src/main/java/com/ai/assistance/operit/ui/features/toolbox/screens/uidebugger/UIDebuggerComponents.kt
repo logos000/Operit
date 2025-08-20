@@ -68,6 +68,9 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -85,7 +88,12 @@ import androidx.compose.ui.text.withStyle
 import com.ai.assistance.operit.core.tools.automatic.UINodeType
 import com.ai.assistance.operit.core.tools.automatic.UIOperation
 import com.ai.assistance.operit.core.tools.automatic.UISelector
+import com.ai.assistance.operit.core.tools.system.action.ActionListener
 import androidx.compose.ui.text.input.KeyboardType
+import com.ai.assistance.operit.ui.features.toolbox.screens.uidebugger.components.ActivityMonitorPanel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 
 @Composable
@@ -97,16 +105,31 @@ fun UIDebuggerOverlay(
     val viewModel: UIDebuggerViewModel = viewModel(viewModelStoreOwner = viewModelStoreOwner)
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
-    var isOverlayVisible by remember { mutableStateOf(false) }
+    
+    // 简化状态管理 - 只管理UI分析和元素选择
+    var isUIAnalysisActive by remember { mutableStateOf(false) }
     var selectedElement by remember { mutableStateOf<UIElement?>(null) }
-    var showNodeList by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.initialize(context)
     }
 
+    // 组件销毁时的清理逻辑
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                if (uiState.isActivityListening) {
+                    viewModel.stopActivityListening()
+                }
+            } catch (e: Exception) {
+                // 忽略清理时的异常
+            }
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
-        if (isOverlayVisible) {
+        // UI元素高亮层
+        if (isUIAnalysisActive) {
             ElementHighlightOverlay(
                 elements = uiState.elements,
                 onElementClick = { element ->
@@ -115,9 +138,10 @@ fun UIDebuggerOverlay(
             )
         }
 
-        selectedElement?.let { element ->
+        // 选中元素信息面板
+        if (selectedElement != null && isUIAnalysisActive) {
             ElementInfoPanel(
-                element = element,
+                element = selectedElement!!,
                 onDismiss = { selectedElement = null },
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -126,119 +150,192 @@ fun UIDebuggerOverlay(
             )
         }
 
-        // 节点列表面板
-        if (showNodeList && uiState.selectedPackage != null) {
-            NodeListPanel(
-                packageInfo = uiState.selectedPackage!!,
-                nodes = uiState.packageNodes,
-                onDismiss = { showNodeList = false },
+        // Activity监听面板
+        if (uiState.showActivityMonitor) {
+            ActivityMonitorPanel(
+                isListening = uiState.isActivityListening,
+                events = uiState.activityEvents,
+                currentActivityName = uiState.currentActivityName,
+                onStartListening = { viewModel.startActivityListening() },
+                onStopListening = { viewModel.stopActivityListening() },
+                onClearEvents = { viewModel.clearActivityEvents() },
+                onDismiss = { 
+                    viewModel.toggleActivityMonitor()
+                    // 不再自动停止监听，让用户手动控制
+                },
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
+                    .align(Alignment.TopCenter)
                     .padding(16.dp)
-                    .zIndex(15f)
+                    .zIndex(20f)
             )
         }
 
-        Box(modifier = Modifier.fillMaxSize()) {
-            onMinimize?.let { minimizeCallback ->
-                FloatingActionButton(
-                    onClick = minimizeCallback,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(16.dp)
-                ) {
-                    Icon(Icons.Default.Remove, contentDescription = "最小化")
-                }
-            }
-
-            // 配置包按钮
-            SmallFloatingActionButton(
-                onClick = { viewModel.togglePackageDialog() },
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(16.dp)
+        // 简化的控制面板 - 右下角，只有3个按钮
+        Card(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+                .zIndex(5f),
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Settings, contentDescription = "配置包")
-            }
-
-            // 节点列表按钮（仅在选择了配置包时显示）
-            if (uiState.selectedPackage != null) {
+                // UI分析按钮
                 SmallFloatingActionButton(
-                    onClick = { showNodeList = !showNodeList },
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 16.dp, top = 80.dp)
+                    onClick = {
+                        try {
+                            if (isUIAnalysisActive) {
+                                // 关闭UI分析
+                                isUIAnalysisActive = false
+                                selectedElement = null
+                            } else {
+                                // 开启UI分析
+                                viewModel.refreshUI()
+                                isUIAnalysisActive = true
+                            }
+                        } catch (e: Exception) {
+                            // 处理异常
+                        }
+                    },
+                    containerColor = if (isUIAnalysisActive) 
+                        MaterialTheme.colorScheme.primary 
+                    else 
+                        MaterialTheme.colorScheme.secondaryContainer
                 ) {
-                    Icon(Icons.Default.List, contentDescription = "节点列表")
+                    Icon(
+                        Icons.Default.Build,
+                        contentDescription = if (isUIAnalysisActive) "关闭UI分析" else "UI分析",
+                        tint = if (isUIAnalysisActive) 
+                            MaterialTheme.colorScheme.onPrimary 
+                        else 
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+
+                // Activity监听按钮
+                SmallFloatingActionButton(
+                    onClick = {
+                        try {
+                            if (uiState.showActivityMonitor) {
+                                // 关闭监听面板，但不停止监听
+                                viewModel.toggleActivityMonitor()
+                            } else {
+                                // 打开监听面板
+                                viewModel.toggleActivityMonitor()
+                            }
+                        } catch (e: Exception) {
+                            // 处理异常
+                        }
+                    },
+                    containerColor = when {
+                        uiState.showActivityMonitor -> MaterialTheme.colorScheme.primary
+                        uiState.isActivityListening -> MaterialTheme.colorScheme.errorContainer
+                        else -> MaterialTheme.colorScheme.secondaryContainer
+                    }
+                ) {
+                    Icon(
+                        imageVector = when {
+                            uiState.isActivityListening -> Icons.Default.VisibilityOff
+                            else -> Icons.Default.Visibility
+                        },
+                        contentDescription = if (uiState.showActivityMonitor) "折叠面板" else "Activity监听",
+                        tint = when {
+                            uiState.showActivityMonitor -> MaterialTheme.colorScheme.onPrimary
+                            uiState.isActivityListening -> MaterialTheme.colorScheme.onErrorContainer
+                            else -> MaterialTheme.colorScheme.onSecondaryContainer
+                        }
+                    )
+                }
+
+                // 最小化按钮
+                onMinimize?.let { minimizeCallback ->
+                    SmallFloatingActionButton(
+                        onClick = minimizeCallback,
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                    ) {
+                        Icon(
+                            Icons.Default.Remove,
+                            contentDescription = "最小化",
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
                 }
             }
-            
-            SmallFloatingActionButton(
-                onClick = {
-                    if (isOverlayVisible) {
-                        onClose()
-                    } else {
-                        viewModel.refreshUI()
-                        isOverlayVisible = true
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
-            ) {
-                Icon(
-                    imageVector = if (isOverlayVisible) Icons.Default.Close else Icons.Default.Build,
-                    contentDescription = if (isOverlayVisible) "关闭" else "开始分析"
-                )
-            }
         }
 
-        // 配置包选择对话框
-        if (uiState.showPackageDialog) {
-            PackageSelectionDialog(
-                builtInPackages = uiState.builtInPackages,
-                externalPackages = uiState.externalPackages,
-                isLoading = uiState.isLoadingPackages,
-                onPackageSelected = { packageInfo ->
-                    viewModel.selectPackage(packageInfo)
-                },
-                onDismiss = { viewModel.togglePackageDialog() },
-                onRefresh = { viewModel.loadAvailablePackages() }
-            )
-        }
-
+        // 操作反馈提示
         if (uiState.showActionFeedback) {
             Card(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(16.dp)
-                    .zIndex(20f)
-            ) {
-                Text(
-                    text = uiState.actionFeedbackMessage,
-                    modifier = Modifier.padding(16.dp)
+                    .padding(horizontal = 16.dp, vertical = 100.dp)
+                    .zIndex(25f),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
                 )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = uiState.actionFeedbackMessage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
             }
         }
 
+        // 错误消息提示
         uiState.errorMessage?.let { error ->
             Card(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(16.dp)
-                    .zIndex(20f),
+                    .padding(horizontal = 16.dp, vertical = 100.dp)
+                    .zIndex(25f),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.errorContainer
                 )
             ) {
-                Text(
-                    text = error,
+                Row(
                     modifier = Modifier.padding(16.dp),
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
             }
         }
     }
+}
+
+// 调试器模式枚举 - 简化版本
+enum class DebuggerMode {
+    CLOSED,           // 关闭状态
+    UI_ANALYSIS,      // UI分析模式
+    ACTIVITY_MONITOR  // Activity监听模式
 }
 
 @Composable
@@ -1110,7 +1207,8 @@ fun ExportPackageItem(
             }
         }
     }
-} 
+}
+
 
 // 编辑相关组件
 

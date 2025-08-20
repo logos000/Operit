@@ -8,6 +8,7 @@ import com.ai.assistance.operit.core.tools.automatic.UIRouteConfig
 import com.ai.assistance.operit.core.tools.automatic.UIEdgeDefinition
 import com.ai.assistance.operit.core.tools.automatic.UINodeType
 import com.ai.assistance.operit.core.tools.automatic.UIOperation
+import com.ai.assistance.operit.core.tools.system.action.ActionListener
 
 enum class UIDebuggerViewMode {
     NODES, FUNCTIONS
@@ -60,7 +61,12 @@ data class UIDebuggerState(
     val editingFunction: UIFunction? = null,
     val showCreatePackageDialog: Boolean = false,
     val selectedPackageForExport: AutomationPackageInfo? = null,
-    val isConfigModified: Boolean = false
+    val isConfigModified: Boolean = false,
+    // Activity监听相关状态
+    val isActivityListening: Boolean = false,
+    val activityEvents: List<ActionListener.ActionEvent> = emptyList(),
+    val showActivityMonitor: Boolean = false,
+    val currentActivityName: String? = null
 )
 
 /** 正在编辑的边信息 */
