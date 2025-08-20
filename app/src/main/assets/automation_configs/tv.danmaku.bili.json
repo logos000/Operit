@@ -67,8 +67,8 @@
                 {
                     "type": "Click",
                     "selector": {
-                        "type": "By",
-                        "text": "82万 291 2:32 现在的带货视频是把观众当日本人耍呢？ 竖屏 一棵苏铁"
+                        "type": "ByResourceId",
+                        "value": "search_text"
                     },
                     "description": "点击 '82万 291 2:32 现在的带货视频是把观众当日本人耍呢？ 竖屏 一棵苏铁'"
                 }
@@ -82,7 +82,7 @@
                     "type": "Click",
                     "selector": {
                         "type": "ByText",
-                        "text": "夸克，我真是小看你了...... 190万人感兴趣"
+                        "value": "夸克，我真是小看你了...... 190万人感兴趣"
                     },
                     "description": "点击 '夸克，我真是小看你了...... 190万人感兴趣'"
                 }
@@ -96,7 +96,7 @@
                     "type": "Click",
                     "selector": {
                         "type": "ByText",
-                        "text": "10.6万 758 13:07 盘点30款 全球最畅销手游【用户数量最多】 杨先森Leon"
+                        "value": "10.6万 758 13:07 盘点30款 全球最畅销手游【用户数量最多】 杨先森Leon"
                     },
                     "description": "点击 '10.6万 758 13:07 盘点30款 全球最畅销手游【用户数量最多】 杨先森Leon'"
                 }
@@ -132,7 +132,7 @@
                     "type": "Click",
                     "selector": {
                         "type": "ByText",
-                        "text": "未知元素"
+                        "value": "未知元素"
                     },
                     "description": "点击页面元素"
                 }

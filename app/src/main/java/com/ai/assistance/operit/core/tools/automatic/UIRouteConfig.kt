@@ -171,13 +171,14 @@ class UIRouteConfig {
         }
 
         private fun convertJsonSelector(jsonSelector: JsonUISelector): UISelector {
+            val value = jsonSelector.value ?: throw IllegalArgumentException("Selector must have a 'value' field.")
             return when (jsonSelector.type) {
-                "ByText" -> UISelector.ByText(jsonSelector.text ?: jsonSelector.value ?: throw IllegalArgumentException("ByText selector requires a 'text' or 'value' field."))
-                "ByResourceId" -> UISelector.ByResourceId(jsonSelector.id ?: jsonSelector.value ?: throw IllegalArgumentException("ByResourceId selector requires an 'id' or 'value' field."))
-                "ByClassName" -> UISelector.ByClassName(jsonSelector.name ?: jsonSelector.value ?: throw IllegalArgumentException("ByClassName selector requires a 'name' or 'value' field."))
-                "ByContentDesc" -> UISelector.ByContentDesc(jsonSelector.desc ?: jsonSelector.value ?: throw IllegalArgumentException("ByContentDescription selector requires a 'desc' or 'value' field."))
-                "ByBounds" -> UISelector.ByBounds(jsonSelector.bounds ?: jsonSelector.value ?: throw IllegalArgumentException("ByBounds selector requires a 'bounds' or 'value' field."))
-                "ByXPath" -> UISelector.ByXPath(jsonSelector.xpath ?: jsonSelector.value ?: throw IllegalArgumentException("ByXPath selector requires an 'xpath' or 'value' field."))
+                "ByText" -> UISelector.ByText(value)
+                "ByResourceId" -> UISelector.ByResourceId(value)
+                "ByClassName" -> UISelector.ByClassName(value)
+                "ByContentDesc" -> UISelector.ByContentDesc(value)
+                "ByBounds" -> UISelector.ByBounds(value)
+                "ByXPath" -> UISelector.ByXPath(value)
                 "Compound" -> {
                     val selectors = jsonSelector.selectors?.map { convertJsonSelector(it) } ?: emptyList()
                     val operator = jsonSelector.operator ?: "AND"
