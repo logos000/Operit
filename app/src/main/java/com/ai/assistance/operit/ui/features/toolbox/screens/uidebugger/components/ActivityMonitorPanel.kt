@@ -1,96 +1,58 @@
 package com.ai.assistance.operit.ui.features.toolbox.screens.uidebugger.components
 
-
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
+import android.content.Context
+import android.util.Log
+import android.view.inputmethod.InputMethodManager
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
-import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.ai.assistance.operit.core.tools.automatic.UIEdgeDefinition
-import com.ai.assistance.operit.core.tools.automatic.UIFunction
-import com.ai.assistance.operit.core.tools.automatic.UINode
-import com.ai.assistance.operit.core.tools.automatic.config.AutomationPackageInfo
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.Launch
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color.Companion.Transparent
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
-import com.ai.assistance.operit.core.tools.automatic.UINodeType
-import com.ai.assistance.operit.core.tools.automatic.UIOperation
-import com.ai.assistance.operit.core.tools.automatic.UISelector
+import androidx.compose.ui.unit.dp
 import com.ai.assistance.operit.core.tools.system.action.ActionListener
-import androidx.compose.ui.text.input.KeyboardType
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -105,8 +67,49 @@ fun ActivityMonitorPanel(
     onStopListening: () -> Unit,
     onClearEvents: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // 新增自动构建相关参数
+    autoGraphBuilding: Boolean = false,
+    detectedCurrentPackageName: String? = null,
+    selectedPackage: com.ai.assistance.operit.core.tools.automatic.config.AutomationPackageInfo? = null,
+    autoGeneratedNodes: Int = 0,
+    autoGeneratedEdges: Int = 0,
+    onToggleAutoGraphBuilding: () -> Unit = {}
 ) {
+    val TAG = "ActivityMonitorPanel"
+    val context = LocalContext.current
+
+    // 焦点管理
+    val focusRequester = remember { FocusRequester() }
+    val inputMethodManager = remember {
+        context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+    }
+    var hiddenInputText by remember { mutableStateOf("") }
+    var hasFocus by remember { mutableStateOf(false) }
+
+    // 监听状态变化时管理焦点
+    LaunchedEffect(isListening) {
+        if (isListening) {
+            // 开始监听时获取焦点
+            try {
+                focusRequester.requestFocus()
+                hasFocus = true
+                Log.d(TAG, "Activity监听启动时已获取输入法焦点")
+            } catch (e: Exception) {
+                Log.w(TAG, "请求焦点失败: ${e.message}")
+                hasFocus = false
+            }
+        } else {
+            // 停止监听时释放焦点
+            hasFocus = false
+            Log.d(TAG, "Activity监听停止时释放输入法焦点")
+        }
+    }
+
+    // 监控状态变化
+    LaunchedEffect(isListening, events.size) {
+        Log.d(TAG, "面板状态更新: isListening=$isListening, events.size=${events.size}")
+    }
     Surface(
         modifier = modifier
             .widthIn(min = 300.dp, max = 400.dp)
@@ -114,183 +117,304 @@ fun ActivityMonitorPanel(
         shape = RoundedCornerShape(8.dp),
         shadowElevation = 8.dp
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            // 标题栏
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Visibility,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Activity监听",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = onDismiss) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "关闭"
-                    )
-                }
-            }
+        Box {
+            // 隐藏的输入框用于获取焦点，参考FloatingFullscreenMode的实现
+            BasicTextField(
+                value = hiddenInputText,
+                onValueChange = { hiddenInputText = it },
+                modifier = Modifier
+                    .focusRequester(focusRequester)
+                    .size(1.dp) // 最小尺寸，几乎不可见
+                    .absoluteOffset(x = (-1000).dp, y = (-1000).dp), // 移到屏幕外
+                textStyle = androidx.compose.ui.text.TextStyle(color = Transparent)
+            )
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // 状态指示器
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isListening) 
-                        MaterialTheme.colorScheme.errorContainer 
-                    else 
-                        MaterialTheme.colorScheme.surfaceVariant
-                )
+            Column(
+                modifier = Modifier.padding(16.dp)
             ) {
+                // 标题栏
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = if (isListening) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        imageVector = Icons.Default.Visibility,
                         contentDescription = null,
-                        tint = if (isListening) 
-                            MaterialTheme.colorScheme.onErrorContainer 
-                        else 
-                            MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
+                        tint = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isListening) "正在监听Activity事件" else "监听已停止",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = if (isListening) 
-                            MaterialTheme.colorScheme.onErrorContainer 
-                        else 
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "Activity监听",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
                     )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // 控制按钮
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (isListening) {
-                    Button(
-                        onClick = onStopListening,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        ),
-                        modifier = Modifier.weight(1f)
-                    ) {
+                    IconButton(onClick = onDismiss) {
                         Icon(
-                            Icons.Default.VisibilityOff,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "关闭"
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("停止监听")
-                    }
-                } else {
-                    Button(
-                        onClick = onStartListening,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            Icons.Default.Visibility,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("开始监听")
                     }
                 }
 
-                OutlinedButton(
-                    onClick = onClearEvents,
-                    enabled = events.isNotEmpty()
-                ) {
-                    Icon(
-                        Icons.Default.Clear,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("清除")
-                }
-            }
+                Spacer(modifier = Modifier.height(12.dp))
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // 当前活动显示
-            if (currentActivityName != null) {
+                // 状态指示器
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                        containerColor = if (isListening)
+                            MaterialTheme.colorScheme.errorContainer
+                        else
+                            MaterialTheme.colorScheme.surfaceVariant
                     )
                 ) {
-                    Column(
-                        modifier = Modifier.padding(8.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "当前活动",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        Icon(
+                            imageVector = if (isListening) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                            contentDescription = null,
+                            tint = if (isListening)
+                                MaterialTheme.colorScheme.onErrorContainer
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = currentActivityName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
+                            text = if (isListening) "正在监听Activity事件" else "监听已停止",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isListening)
+                                MaterialTheme.colorScheme.onErrorContainer
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
 
-            // 事件列表
-            if (events.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(100.dp),
-                    contentAlignment = Alignment.Center
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 控制按钮
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = if (isListening) "监听中，等待Activity事件..." else "点击开始监听按钮开始监听Activity事件",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (isListening) {
+                        Button(
+                            onClick = onStopListening,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                Icons.Default.VisibilityOff,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("停止监听")
+                        }
+                    } else {
+                        Button(
+                            onClick = onStartListening,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                Icons.Default.Visibility,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("开始监听")
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = onClearEvents,
+                        enabled = events.isNotEmpty()
+                    ) {
+                        Icon(
+                            Icons.Default.Clear,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("清除")
+                    }
                 }
-            } else {
-                Text(
-                    text = "事件记录 (${events.size})",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(events.reversed()) { event -> // 最新的事件在上面
-                        ActivityEventItem(event = event)
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 自动构建功能 - 只要选择了包就显示
+                if (selectedPackage != null) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (autoGraphBuilding)
+                                MaterialTheme.colorScheme.tertiaryContainer
+                            else
+                                MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Build,
+                                    contentDescription = null,
+                                    tint = if (autoGraphBuilding)
+                                        MaterialTheme.colorScheme.onTertiaryContainer
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "智能构建",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (autoGraphBuilding)
+                                        MaterialTheme.colorScheme.onTertiaryContainer
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
+                                Switch(
+                                    checked = autoGraphBuilding,
+                                    onCheckedChange = { onToggleAutoGraphBuilding() },
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            
+                            if (autoGraphBuilding) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "目标: ${selectedPackage?.packageName ?: detectedCurrentPackageName}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "操作目标应用时自动记录页面跳转",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                )
+                                
+                                if (autoGeneratedNodes > 0 || autoGeneratedEdges > 0) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Text(
+                                            text = "已生成节点: $autoGeneratedNodes",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Text(
+                                            text = "边: $autoGeneratedEdges",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                // 当前活动显示
+                if (currentActivityName != null) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(8.dp)
+                        ) {
+                            Text(
+                                text = "当前活动",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                text = currentActivityName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                // 事件列表
+                if (events.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (isListening) "监听中，等待Activity事件..." else "点击开始监听按钮开始监听Activity事件",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    // 添加调试信息显示
+                    if (isListening) {
+                        LaunchedEffect(Unit) {
+                            Log.d(TAG, "面板显示空事件列表，但监听状态为true")
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "事件记录 (${events.size})",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(events.reversed()) { event -> // 最新的事件在上面
+                            ActivityEventItem(event = event)
+                        }
+                    }
+
+                    // 记录事件渲染
+                    LaunchedEffect(events.size) {
+                        Log.d(TAG, "渲染事件列表，共${events.size}个事件")
+                        if (events.isNotEmpty()) {
+                            val latestEvent = events.last()
+                            Log.d(
+                                TAG,
+                                "最新事件: ${latestEvent.actionType} - ${latestEvent.elementInfo?.packageName}"
+                            )
+                        }
                     }
                 }
             }
@@ -330,7 +454,7 @@ private fun ActivityEventItem(
 
             if (event.elementInfo != null) {
                 Spacer(modifier = Modifier.height(4.dp))
-                
+
                 // 显示活动名称
                 if (event.elementInfo.className != null) {
                     Text(
@@ -341,7 +465,7 @@ private fun ActivityEventItem(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                
+
                 // 显示元素信息
                 Text(
                     text = buildString {

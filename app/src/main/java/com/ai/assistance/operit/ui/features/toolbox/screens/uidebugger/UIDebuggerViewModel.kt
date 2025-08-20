@@ -43,6 +43,29 @@ class UIDebuggerViewModel : ViewModel() {
     
     // Activity监听相关
     private var currentActionListener: ActionListener? = null
+    private var lastEventTimestamp: Long = 0
+    private var connectionCheckJob: kotlinx.coroutines.Job? = null
+
+    companion object {
+        @Volatile
+        private var INSTANCE: UIDebuggerViewModel? = null
+        
+        /**
+         * 获取单例实例，确保主应用和悬浮窗使用同一个ViewModel
+         */
+        fun getInstance(): UIDebuggerViewModel {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: UIDebuggerViewModel().also { INSTANCE = it }
+            }
+        }
+        
+        /**
+         * 清除单例实例
+         */
+        fun clearInstance() {
+            INSTANCE = null
+        }
+    }
 
     /**
      * 设置窗口交互控制器
@@ -256,13 +279,16 @@ class UIDebuggerViewModel : ViewModel() {
                 windowInteractionController?.invoke(false)
                 delay(300)
 
-                val elements = withContext(Dispatchers.IO) {
+                val (elements, activityInfo) = withContext(Dispatchers.IO) {
                     val pageInfoTool = AITool(name = "get_page_info", parameters = listOf())
                     val result = toolHandler.executeTool(pageInfoTool)
                     if (result.success) {
                         val resultData = result.result
                         if (resultData is UIPageResultData) {
-                            convertToUIElements(resultData.uiElements)
+                            val currentActivityName = resultData.activityName
+                            val currentPackageName = resultData.packageName
+                            val elements = convertToUIElements(resultData.uiElements, currentActivityName, currentPackageName)
+                            Pair(elements, Pair(currentActivityName, currentPackageName))
                         } else {
                             throw Exception("返回数据类型错误")
                         }
@@ -271,7 +297,14 @@ class UIDebuggerViewModel : ViewModel() {
                     }
                 }
 
-                _uiState.update { it.copy(elements = elements, errorMessage = null) }
+                _uiState.update { 
+                    it.copy(
+                        elements = elements, 
+                        errorMessage = null,
+                        currentAnalyzedActivityName = activityInfo.first,
+                        currentAnalyzedPackageName = activityInfo.second
+                    ) 
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "刷新UI元素失败", e)
                 _uiState.update { it.copy(errorMessage = "刷新失败") }
@@ -697,24 +730,30 @@ class UIDebuggerViewModel : ViewModel() {
     }
 
     private fun convertToUIElements(
-        node: com.ai.assistance.operit.core.tools.SimplifiedUINode
+        node: com.ai.assistance.operit.core.tools.SimplifiedUINode,
+        activityName: String? = null,
+        packageName: String? = null
     ): List<UIElement> {
         val elements = mutableListOf<UIElement>()
-        processNode(node, elements)
+        processNode(node, elements, activityName, packageName)
         return elements
     }
 
     private fun processNode(
         node: com.ai.assistance.operit.core.tools.SimplifiedUINode,
-        elements: MutableList<UIElement>
+        elements: MutableList<UIElement>,
+        activityName: String? = null,
+        packageName: String? = null
     ) {
-        val element = createUiElement(node)
+        val element = createUiElement(node, activityName, packageName)
         elements.add(element)
-        node.children.forEach { childNode -> processNode(childNode, elements) }
+        node.children.forEach { childNode -> processNode(childNode, elements, activityName, packageName) }
     }
 
     private fun createUiElement(
-        node: com.ai.assistance.operit.core.tools.SimplifiedUINode
+        node: com.ai.assistance.operit.core.tools.SimplifiedUINode,
+        activityName: String? = null,
+        packageName: String? = null
     ): UIElement {
         val bounds = node.bounds?.let {
             try {
@@ -739,7 +778,9 @@ class UIDebuggerViewModel : ViewModel() {
             contentDesc = node.contentDesc,
             text = node.text ?: "",
             bounds = bounds,
-            isClickable = node.isClickable
+            isClickable = node.isClickable,
+            activityName = activityName,
+            packageName = packageName
         )
     }
 
@@ -751,32 +792,43 @@ class UIDebuggerViewModel : ViewModel() {
     fun startActivityListening() {
         viewModelScope.launch {
             try {
+                Log.d(TAG, "开始启动Activity监听...")
+                
                 // 如果已经在监听，直接返回
-                if (_uiState.value.isActivityListening && currentActionListener != null) {
+                if (currentActionListener?.isListening() == true) {
+                    Log.d(TAG, "监听器已在运行，同步UI状态")
+                    _uiState.update { it.copy(isActivityListening = true) } // 同步UI状态
                     showActionFeedback("监听已在运行中")
                     return@launch
                 }
 
                 // 先停止现有的监听器，避免重复监听
                 currentActionListener?.let { existingListener ->
+                    Log.d(TAG, "停止现有监听器")
                     existingListener.stopListening()
                     currentActionListener = null
                 }
 
+                Log.d(TAG, "获取最高权限的监听器...")
                 val (listener, status) = ActionListenerFactory.getHighestAvailableListener(context)
+                Log.d(TAG, "获取到监听器类型: ${listener::class.simpleName}, 权限状态: ${status.granted}")
                 
                 if (!status.granted) {
+                    Log.w(TAG, "权限不足: ${status.reason}")
                     showActionFeedback("权限不足: ${status.reason}")
                     return@launch
                 }
 
                 currentActionListener = listener
+                Log.d(TAG, "开始启动监听器...")
                 val result = listener.startListening { event ->
+                    Log.v(TAG, "监听器回调触发: ${event.actionType} - ${event.elementInfo?.packageName}")
                     // 处理监听到的事件
                     handleActionEvent(event)
                 }
 
                 if (result.success) {
+                    Log.d(TAG, "监听器启动成功")
                     _uiState.update { 
                         it.copy(
                             isActivityListening = true,
@@ -786,6 +838,7 @@ class UIDebuggerViewModel : ViewModel() {
                     }
                     showActionFeedback("Activity监听已启动")
                 } else {
+                    Log.e(TAG, "监听器启动失败: ${result.message}")
                     showActionFeedback("启动监听失败: ${result.message}")
                 }
             } catch (e: Exception) {
@@ -821,10 +874,67 @@ class UIDebuggerViewModel : ViewModel() {
     }
 
     /**
+     * 切换自动构建图模式
+     */
+    fun toggleAutoGraphBuilding() {
+        _uiState.update { currentState ->
+            val newAutoMode = !currentState.autoGraphBuilding
+            Log.d(TAG, "切换自动构建模式: $newAutoMode")
+            
+            if (newAutoMode && currentState.selectedPackage != null) {
+                // 检测当前包名
+                val detectedPackage = currentState.selectedPackage?.packageName
+                Log.d(TAG, "自动构建模式启用，目标包名: $detectedPackage")
+                
+                currentState.copy(
+                    autoGraphBuilding = newAutoMode,
+                    detectedCurrentPackageName = detectedPackage,
+                    autoGeneratedNodes = 0,
+                    autoGeneratedEdges = 0,
+                    lastActivityName = null
+                )
+            } else {
+                currentState.copy(
+                    autoGraphBuilding = newAutoMode,
+                    // 关闭时不重置detectedCurrentPackageName，保留上次设置
+                    lastActivityName = null,
+                    autoGeneratedNodes = 0,
+                    autoGeneratedEdges = 0,
+                    lastClickEvent = null
+                )
+            }
+        }
+    }
+
+    /**
      * 切换Activity监听显示状态
      */
     fun toggleActivityMonitor() {
-        _uiState.update { it.copy(showActivityMonitor = !it.showActivityMonitor) }
+        Log.d(TAG, "切换Activity监听面板显示状态")
+        _uiState.update { currentState ->
+            val newShowState = !currentState.showActivityMonitor
+            Log.d(TAG, "面板显示状态从 ${currentState.showActivityMonitor} 变更为 $newShowState")
+            
+            // 如果要显示面板，同步检查实际的监听状态
+            if (newShowState) {
+                val actualListeningState = currentActionListener?.isListening() == true
+                val eventsCount = currentState.activityEvents.size
+                Log.d(TAG, "显示面板时同步状态: currentActionListener=${currentActionListener != null}, isListening=$actualListeningState, eventsCount=$eventsCount")
+                
+                // 检查AIDL连接状态
+                if (currentActionListener != null && !actualListeningState) {
+                    Log.w(TAG, "检测到监听器存在但未监听，可能AIDL连接断开")
+                }
+                
+                currentState.copy(
+                    showActivityMonitor = newShowState,
+                    isActivityListening = actualListeningState
+                )
+            } else {
+                Log.d(TAG, "隐藏面板，保持监听状态不变")
+                currentState.copy(showActivityMonitor = newShowState)
+            }
+        }
     }
 
     /**
@@ -849,7 +959,6 @@ class UIDebuggerViewModel : ViewModel() {
             if (event.elementInfo?.packageName == currentPackageName) {
                 return@launch
             }
-            
             _uiState.update { state ->
                 val newEvents = (state.activityEvents + event).takeLast(100) // 保留最近100个事件
                 
@@ -862,10 +971,186 @@ class UIDebuggerViewModel : ViewModel() {
                     }
                 }
                 
-                state.copy(
+                // 自动构建图逻辑
+                var updatedState = state.copy(
                     activityEvents = newEvents,
                     currentActivityName = currentActivity ?: state.currentActivityName
                 )
+                
+                // 如果启用了自动构建且当前事件是目标应用的事件
+                Log.d(TAG, "自动构建检查: autoGraphBuilding=${state.autoGraphBuilding}, detectedPackage=${state.detectedCurrentPackageName}, eventPackage=${event.elementInfo?.packageName}")
+                if (state.autoGraphBuilding && 
+                    state.detectedCurrentPackageName != null &&
+                    event.elementInfo?.packageName == state.detectedCurrentPackageName) {
+                    
+                    Log.d(TAG, "触发自动构建逻辑: ${event.actionType}")
+                    // 监听页面切换和关键的点击事件
+                    when (event.actionType) {
+                        ActionListener.ActionType.SCREEN_CHANGE -> {
+                            Log.d(TAG, "处理SCREEN_CHANGE事件进行自动构建")
+                            updatedState = processAutoGraphBuilding(updatedState, event)
+                        }
+                        ActionListener.ActionType.CLICK -> {
+                            Log.d(TAG, "记录CLICK事件为后续页面切换准备")
+                            // 记录点击事件，为后续的页面切换做准备
+                            updatedState = updatedState.copy(
+                                lastClickEvent = event
+                            )
+                        }
+                        else -> { 
+                            Log.d(TAG, "忽略其他类型事件: ${event.actionType}")
+                        }
+                    }
+                } else {
+                    Log.d(TAG, "不满足自动构建条件，跳过")
+                }
+                
+                updatedState
+            }
+        }
+    }
+
+    /**
+     * 处理自动构建图逻辑
+     */
+    private fun processAutoGraphBuilding(
+        state: UIDebuggerState,
+        event: ActionListener.ActionEvent
+    ): UIDebuggerState {
+        val elementInfo = event.elementInfo ?: return state
+        val currentConfig = state.packageConfig ?: return state
+        val currentActivity = elementInfo.className ?: return state
+        
+        Log.d(TAG, "处理自动构建: 从 ${state.lastActivityName} 到 $currentActivity")
+        
+        // 生成节点名称（简化版本）
+        val nodeName = currentActivity.substringAfterLast(".")
+        var addedNodes = 0
+        var addedEdges = 0
+        
+        // 检查节点是否已存在，如果不存在则创建
+        if (!currentConfig.nodeDefinitions.containsKey(nodeName)) {
+            val newNode = UINode(
+                name = nodeName,
+                packageName = elementInfo.packageName ?: "",
+                activityName = currentActivity,
+                nodeType = UINodeType.LIST_PAGE
+            )
+            currentConfig.defineNode(newNode)
+            addedNodes++
+            Log.d(TAG, "自动创建节点: $nodeName")
+        }
+        
+        // 如果有上一个Activity，创建边
+        if (state.lastActivityName != null) {
+            val lastNodeName = state.lastActivityName.substringAfterLast(".")
+            
+            // 检查上一个节点是否存在，如果不存在则创建
+            if (!currentConfig.nodeDefinitions.containsKey(lastNodeName)) {
+                val lastNode = UINode(
+                    name = lastNodeName,
+                    packageName = elementInfo.packageName ?: "",
+                    activityName = state.lastActivityName,
+                    nodeType = UINodeType.LIST_PAGE
+                )
+                currentConfig.defineNode(lastNode)
+                addedNodes++
+                Log.d(TAG, "自动创建上一个节点: $lastNodeName")
+            }
+            
+            // 检查边是否已存在
+            val existingEdges = currentConfig.edgeDefinitions[lastNodeName] ?: mutableListOf()
+            val edgeExists = existingEdges.any { it.toNodeName == nodeName }
+            
+            if (!edgeExists && lastNodeName != nodeName) {
+                // 创建基于用户操作的边，优先使用点击事件
+                val operations = if (state.lastClickEvent != null) {
+                    createOperationsFromEvent(state.lastClickEvent)
+                } else {
+                    createOperationsFromEvent(event)
+                }
+                
+                currentConfig.defineEdge(
+                    fromNodeName = lastNodeName,
+                    toNodeName = nodeName,
+                    operations = operations,
+                    validation = null,
+                    conditions = emptySet(),
+                    weight = 1.0
+                )
+                addedEdges++
+                Log.d(TAG, "自动创建边: $lastNodeName -> $nodeName，基于${if (state.lastClickEvent != null) "点击" else "页面切换"}事件")
+            }
+        }
+        
+        // 如果有变化，保存配置
+        if (addedNodes > 0 || addedEdges > 0) {
+            state.selectedPackage?.let { packageInfo ->
+                saveConfigSilently(currentConfig, packageInfo)
+            }
+        }
+        
+        return state.copy(
+            lastActivityName = currentActivity,
+            autoGeneratedNodes = state.autoGeneratedNodes + addedNodes,
+            autoGeneratedEdges = state.autoGeneratedEdges + addedEdges,
+            packageNodes = currentConfig.nodeDefinitions.values.toList(), // 更新节点列表
+            lastClickEvent = null // 清除已使用的点击事件
+        )
+    }
+
+    /**
+     * 根据事件创建操作序列
+     */
+    private fun createOperationsFromEvent(event: ActionListener.ActionEvent): List<UIOperation> {
+        val operations = mutableListOf<UIOperation>()
+        
+        when (event.actionType) {
+            ActionListener.ActionType.CLICK -> {
+                event.elementInfo?.let { elementInfo ->
+                    val selector = when {
+                        !elementInfo.resourceId.isNullOrBlank() -> 
+                            UISelector.ByResourceId(elementInfo.resourceId)
+                        !elementInfo.text.isNullOrBlank() -> 
+                            UISelector.ByText(elementInfo.text)
+                        !elementInfo.contentDescription.isNullOrBlank() -> 
+                            UISelector.ByContentDesc(elementInfo.contentDescription)
+                        else -> UISelector.ByText("未知元素")
+                    }
+                    
+                    val description = when {
+                        !elementInfo.text.isNullOrBlank() -> "点击 '${elementInfo.text}'"
+                        !elementInfo.contentDescription.isNullOrBlank() -> "点击 '${elementInfo.contentDescription}'"
+                        !elementInfo.resourceId.isNullOrBlank() -> "点击 ${elementInfo.resourceId}"
+                        else -> "点击页面元素"
+                    }
+                    
+                    operations.add(UIOperation.Click(selector, description))
+                }
+            }
+            ActionListener.ActionType.TEXT_INPUT -> {
+                operations.add(UIOperation.Wait(500L, "等待页面加载"))
+            }
+            else -> {
+                operations.add(UIOperation.Wait(1000L, "等待页面切换"))
+            }
+        }
+        
+        return operations
+    }
+
+    /**
+     * 静默保存配置（不显示反馈消息）
+     */
+    private fun saveConfigSilently(config: UIRouteConfig, packageInfo: AutomationPackageInfo) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    packageManager.saveConfig(config, packageInfo)
+                }
+                Log.d(TAG, "自动保存配置成功")
+            } catch (e: Exception) {
+                Log.e(TAG, "自动保存配置失败", e)
             }
         }
     }
@@ -879,5 +1164,6 @@ class UIDebuggerViewModel : ViewModel() {
             currentActionListener?.stopListening()
             currentActionListener = null
         }
+        // 注意：不要在这里清除单例实例，因为可能有其他地方还在使用
     }
 }

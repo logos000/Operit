@@ -75,7 +75,6 @@ import com.ai.assistance.operit.core.tools.automatic.UISelector
 import androidx.compose.ui.text.input.KeyboardType
 import com.ai.assistance.operit.ui.features.toolbox.screens.uidebugger.ExportPackageItem
 import com.ai.assistance.operit.ui.features.toolbox.screens.uidebugger.ImportExportMode
-import com.ai.assistance.operit.ui.features.toolbox.screens.uidebugger.PackageItem
 
 @Composable
 fun ImportExportDialog(
@@ -84,9 +83,9 @@ fun ImportExportDialog(
     externalPackages: List<AutomationPackageInfo>,
     isLoading: Boolean,
     onModeChange: (ImportExportMode) -> Unit,
-    onPackageSelected: (com.ai.assistance.operit.core.tools.automatic.config.AutomationPackageInfo) -> Unit,
+    onPackageSelected: (AutomationPackageInfo) -> Unit,
     onImportFromFile: () -> Unit,
-    onExportPackage: (com.ai.assistance.operit.core.tools.automatic.config.AutomationPackageInfo) -> Unit,
+    onExportPackage: (AutomationPackageInfo) -> Unit,
     onDismiss: () -> Unit,
     onRefresh: () -> Unit
 ) {
@@ -261,4 +260,77 @@ fun ImportExportDialog(
             }
         }
     )
+}
+
+@Composable
+private fun PackageItem(
+    packageInfo: AutomationPackageInfo,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(
+            containerColor = if (packageInfo.isBuiltIn) 
+                MaterialTheme.colorScheme.primaryContainer 
+            else 
+                MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = if (packageInfo.isBuiltIn) Icons.Default.Description else Icons.Default.Settings,
+                contentDescription = null,
+                tint = if (packageInfo.isBuiltIn) 
+                    MaterialTheme.colorScheme.onPrimaryContainer 
+                else 
+                    MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = packageInfo.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = if (packageInfo.isBuiltIn) 
+                        MaterialTheme.colorScheme.onPrimaryContainer 
+                    else 
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Text(
+                    text = packageInfo.packageName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (packageInfo.isBuiltIn) 
+                        MaterialTheme.colorScheme.onPrimaryContainer 
+                    else 
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                if (packageInfo.description.isNotBlank()) {
+                    Text(
+                        text = packageInfo.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (packageInfo.isBuiltIn) 
+                            MaterialTheme.colorScheme.onPrimaryContainer 
+                        else 
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+            Text(
+                text = if (packageInfo.isBuiltIn) "内置" else "外部",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (packageInfo.isBuiltIn) 
+                    MaterialTheme.colorScheme.onPrimaryContainer 
+                else 
+                    MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
+    }
 }
