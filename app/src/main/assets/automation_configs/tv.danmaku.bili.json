@@ -1,0 +1,187 @@
+{
+    "appName": "哔哩哔哩",
+    "packageName": "tv.danmaku.bili",
+    "description": "",
+    "nodes": [
+        {
+            "name": "视频主页",
+            "description": "进去的第一个页面",
+            "activityName": "tv.danmaku.bili.MainActivityV2",
+            "nodeType": "LIST_PAGE"
+        },
+        {
+            "name": "搜索界面",
+            "description": "主页点进去的搜索界面",
+            "nodeType": "LIST_PAGE",
+            "matchCriteria": [
+                {
+                    "type": "ByText",
+                    "value": "搜索历史"
+                },
+                {
+                    "type": "ByText",
+                    "value": "bilibili热搜"
+                },
+                {
+                    "type": "ByText",
+                    "value": "搜索"
+                }
+            ]
+        },
+        {
+            "name": "StoryVideoActivity",
+            "description": "StoryVideoActivity",
+            "activityName": "com.bilibili.video.story.StoryVideoActivity",
+            "nodeType": "LIST_PAGE"
+        },
+        {
+            "name": "InnerAppContainerActivity",
+            "description": "InnerAppContainerActivity",
+            "activityName": "com.bilibili.lib.fasthybrid.container.InnerAppContainerActivity",
+            "nodeType": "LIST_PAGE"
+        },
+        {
+            "name": "UnitedBizDetailsActivity",
+            "description": "UnitedBizDetailsActivity",
+            "activityName": "com.bilibili.ship.theseus.detail.UnitedBizDetailsActivity",
+            "nodeType": "LIST_PAGE"
+        },
+        {
+            "name": "AuthorSpaceActivity",
+            "description": "AuthorSpaceActivity",
+            "activityName": "com.bilibili.app.authorspace.ui.AuthorSpaceActivity",
+            "nodeType": "LIST_PAGE"
+        },
+        {
+            "name": "BiliMainSearchActivity",
+            "description": "BiliMainSearchActivity",
+            "activityName": "com.bilibili.search2.main.BiliMainSearchActivity",
+            "nodeType": "LIST_PAGE"
+        }
+    ],
+    "edges": [
+        {
+            "from": "视频主页",
+            "to": "搜索界面",
+            "operations": [
+                {
+                    "type": "Click",
+                    "selector": {
+                        "type": "By",
+                        "text": "82万 291 2:32 现在的带货视频是把观众当日本人耍呢？ 竖屏 一棵苏铁"
+                    },
+                    "description": "点击 '82万 291 2:32 现在的带货视频是把观众当日本人耍呢？ 竖屏 一棵苏铁'"
+                }
+            ]
+        },
+        {
+            "from": "MainActivityV2",
+            "to": "InnerAppContainerActivity",
+            "operations": [
+                {
+                    "type": "Click",
+                    "selector": {
+                        "type": "ByText",
+                        "text": "夸克，我真是小看你了...... 190万人感兴趣"
+                    },
+                    "description": "点击 '夸克，我真是小看你了...... 190万人感兴趣'"
+                }
+            ]
+        },
+        {
+            "from": "MainActivityV2",
+            "to": "UnitedBizDetailsActivity",
+            "operations": [
+                {
+                    "type": "Click",
+                    "selector": {
+                        "type": "ByText",
+                        "text": "10.6万 758 13:07 盘点30款 全球最畅销手游【用户数量最多】 杨先森Leon"
+                    },
+                    "description": "点击 '10.6万 758 13:07 盘点30款 全球最畅销手游【用户数量最多】 杨先森Leon'"
+                }
+            ]
+        },
+        {
+            "from": "StoryVideoActivity",
+            "to": "MainActivityV2",
+            "operations": [
+                {
+                    "type": "Wait",
+                    "durationMs": 1000,
+                    "description": "等待页面切换"
+                }
+            ]
+        },
+        {
+            "from": "InnerAppContainerActivity",
+            "to": "MainActivityV2",
+            "operations": [
+                {
+                    "type": "Wait",
+                    "durationMs": 1000,
+                    "description": "等待页面切换"
+                }
+            ]
+        },
+        {
+            "from": "UnitedBizDetailsActivity",
+            "to": "AuthorSpaceActivity",
+            "operations": [
+                {
+                    "type": "Click",
+                    "selector": {
+                        "type": "ByText",
+                        "text": "未知元素"
+                    },
+                    "description": "点击页面元素"
+                }
+            ]
+        },
+        {
+            "from": "UnitedBizDetailsActivity",
+            "to": "MainActivityV2",
+            "operations": [
+                {
+                    "type": "Wait",
+                    "durationMs": 1000,
+                    "description": "等待页面切换"
+                }
+            ]
+        },
+        {
+            "from": "UnitedBizDetailsActivity",
+            "to": "BiliMainSearchActivity",
+            "operations": [
+                {
+                    "type": "Wait",
+                    "durationMs": 1000,
+                    "description": "等待页面切换"
+                }
+            ]
+        },
+        {
+            "from": "AuthorSpaceActivity",
+            "to": "UnitedBizDetailsActivity",
+            "operations": [
+                {
+                    "type": "Wait",
+                    "durationMs": 1000,
+                    "description": "等待页面切换"
+                }
+            ]
+        },
+        {
+            "from": "BiliMainSearchActivity",
+            "to": "MainActivityV2",
+            "operations": [
+                {
+                    "type": "Wait",
+                    "durationMs": 1000,
+                    "description": "等待页面切换"
+                }
+            ]
+        }
+    ],
+    "functions": []
+}

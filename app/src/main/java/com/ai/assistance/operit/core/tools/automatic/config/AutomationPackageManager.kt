@@ -370,7 +370,8 @@ class AutomationPackageManager private constructor(private val context: Context)
                 name = node.name,
                 description = node.name, // 可以后续改进添加专门的description字段
                 activityName = node.activityName,
-                nodeType = node.nodeType.name
+                nodeType = node.nodeType.name,
+                matchCriteria = node.matchCriteria.map { convertToJsonSelector(it) }
             )
         }
         

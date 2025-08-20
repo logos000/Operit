@@ -83,7 +83,8 @@ class UIRouteConfig {
                         name = jsonNode.name,
                         packageName = jsonConfig.packageName,
                         activityName = jsonNode.activityName,
-                        nodeType = UINodeType.valueOf(jsonNode.nodeType)
+                        nodeType = UINodeType.valueOf(jsonNode.nodeType),
+                        matchCriteria = jsonNode.matchCriteria?.map { convertJsonSelector(it) } ?: emptyList()
                     ))
                 }
 
@@ -201,7 +202,8 @@ data class UINode(
     val name: String,
     val packageName: String,
     val activityName: String? = null,
-    val nodeType: UINodeType
+    val nodeType: UINodeType,
+    val matchCriteria: List<UISelector> = emptyList()
 )
 
 enum class UINodeType {

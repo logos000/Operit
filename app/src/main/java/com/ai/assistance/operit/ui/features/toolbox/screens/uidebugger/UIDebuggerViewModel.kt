@@ -28,6 +28,7 @@ import com.ai.assistance.operit.core.tools.automatic.UINodeType
 import com.ai.assistance.operit.core.tools.automatic.UIOperation
 import com.ai.assistance.operit.core.tools.automatic.UISelector
 import com.ai.assistance.operit.core.tools.automatic.UIFunction
+import com.ai.assistance.operit.core.tools.automatic.ValidationType
 
 /** UI调试工具的ViewModel，负责处理与AITool的交互 */
 class UIDebuggerViewModel : ViewModel() {
@@ -505,33 +506,50 @@ class UIDebuggerViewModel : ViewModel() {
     }
 
     /**
-     * 保存节点
+     * 保存节点（新建或更新）
      */
-    fun saveNode(name: String, activityName: String?, nodeType: UINodeType) {
+    fun saveNode(name: String, activityName: String?, nodeType: UINodeType, matchCriteria: List<UISelector>) {
         val currentState = _uiState.value
-        val packageInfo = currentState.selectedPackage ?: return
         val config = currentState.packageConfig ?: return
+        val originalName = if (currentState.editMode == EditMode.EDIT) currentState.editingNode?.name else null
+        val packageName = currentState.selectedPackage?.packageName ?: return
 
         val newNode = UINode(
             name = name,
-            packageName = packageInfo.packageName,
+            packageName = packageName,
             activityName = activityName,
-            nodeType = nodeType
+            nodeType = nodeType,
+            matchCriteria = matchCriteria
         )
 
-        // 如果是编辑模式，需要先删除旧节点
-        if (currentState.editMode == EditMode.EDIT && currentState.editingNode != null) {
-            val oldNodeName = currentState.editingNode!!.name
-            if (oldNodeName != name) {
-                // 节点名称发生变化，需要更新相关的边和功能
-                updateReferencesToNode(config, oldNodeName, name)
-            }
-            config.nodeDefinitions.remove(oldNodeName)
+        // 更新配置
+        if (originalName != null && originalName != name) {
+            // 如果重命名了节点，需要处理相关引用
+            renameNodeInConfig(config, originalName, name)
+            config.defineNode(newNode)
+        } else {
+            config.defineNode(newNode)
+        }
+        
+        // 如果是新增，且是第一个节点，则自动选中
+        val newSelectedNode = if (currentState.editMode == EditMode.ADD && currentState.packageNodes.isEmpty()) {
+            name
+        } else {
+            currentState.selectedNodeName
         }
 
-        config.defineNode(newNode)
-        saveConfigAndRefresh(config, packageInfo)
-        hideEditDialog()
+        _uiState.value = currentState.copy(
+            packageConfig = config,
+            packageNodes = config.nodeDefinitions.values.toList(),
+            showEditDialog = false,
+            editMode = EditMode.NONE,
+            isConfigModified = true,
+            selectedNodeName = newSelectedNode
+        )
+
+        viewModelScope.launch {
+            saveConfig()
+        }
     }
 
     /**
@@ -1152,6 +1170,58 @@ class UIDebuggerViewModel : ViewModel() {
             } catch (e: Exception) {
                 Log.e(TAG, "自动保存配置失败", e)
             }
+        }
+    }
+
+    /**
+     * 保存当前配置到文件
+     */
+    private suspend fun saveConfig() {
+        val currentState = _uiState.value
+        val config = currentState.packageConfig ?: return
+        val packageInfo = currentState.selectedPackage ?: return
+        try {
+            packageManager.saveConfig(config, packageInfo)
+            showActionFeedback("配置已保存")
+            _uiState.value = _uiState.value.copy(isConfigModified = false)
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(errorMessage = "保存配置失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 重命名节点时，更新所有对该节点的引用
+     */
+    private fun renameNodeInConfig(config: UIRouteConfig, oldName: String, newName: String) {
+        // 更新边
+        config.edgeDefinitions.forEach { (fromNode, edges) ->
+            edges.forEach { edge ->
+                if (edge.toNodeName == oldName) {
+                    val newEdge = edge.copy(toNodeName = newName)
+                    edges.remove(edge)
+                    edges.add(newEdge)
+                }
+            }
+            if (fromNode == oldName) {
+                val newEdges = config.edgeDefinitions.remove(oldName)
+                if (newEdges != null) {
+                    config.edgeDefinitions[newName] = newEdges
+                }
+            }
+        }
+        
+        // 更新功能
+        config.functionDefinitions.forEach { (_, function) ->
+            if (function.targetNodeName == oldName) {
+                val newFunction = function.copy(targetNodeName = newName)
+                config.functionDefinitions[function.name] = newFunction
+            }
+        }
+
+        // 更新节点自身
+        val node = config.nodeDefinitions.remove(oldName)
+        if (node != null) {
+            config.nodeDefinitions[newName] = node.copy(name = newName)
         }
     }
 

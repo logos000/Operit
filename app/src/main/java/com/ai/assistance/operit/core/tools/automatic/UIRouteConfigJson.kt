@@ -23,7 +23,8 @@ data class JsonUINode(
     val name: String,
     val description: String,
     val activityName: String? = null,
-    val nodeType: String // e.g., "APP_HOME", "LIST_PAGE"
+    val nodeType: String, // e.g., "APP_HOME", "LIST_PAGE"
+    val matchCriteria: List<JsonUISelector>? = null
 )
 
 @Serializable

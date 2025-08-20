@@ -144,8 +144,8 @@ fun UIDebuggerScreen(
                 EditNodeDialog(
                     node = uiState.editingNode,
                     isEditing = uiState.editMode == EditMode.EDIT,
-                    onSave = { name, activityName, nodeType ->
-                        viewModel.saveNode(name, activityName, nodeType)
+                    onSave = { name, activityName, nodeType, matchCriteria ->
+                        viewModel.saveNode(name, activityName, nodeType, matchCriteria)
                     },
                     onDismiss = { viewModel.hideEditDialog() }
                 )

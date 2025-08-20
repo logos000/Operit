@@ -366,7 +366,7 @@ class UIOperationExecutor(
                     return false
                 }
                 
-                val element = findElementInPage(pageInfo, operation.selector)
+                val element = UIElementFinder.findElement(pageInfo.uiElements, operation.selector)
                 if (element == null) {
                     Log.w(TAG, "Validation failed: Element not found with selector: '${operation.selector}'")
                     return false
@@ -430,27 +430,6 @@ class UIOperationExecutor(
         } else {
             null
         }
-    }
-
-    private fun findElementInPage(pageInfo: UIPageResultData, selector: UISelector): SimplifiedUINode? {
-        fun findRecursive(node: SimplifiedUINode): SimplifiedUINode? {
-            val matches = when (selector) {
-                is UISelector.ByText -> node.text?.contains(selector.text, ignoreCase = true) == true
-                is UISelector.ByResourceId -> node.resourceId == selector.id
-                is UISelector.ByContentDesc -> node.contentDesc?.contains(selector.desc, ignoreCase = true) == true
-                is UISelector.ByClassName -> node.className == selector.name
-                else -> false
-            }
-            if (matches) return node
-
-            for (child in node.children) {
-                val found = findRecursive(child)
-                if (found != null) return found
-            }
-
-            return null
-        }
-        return findRecursive(pageInfo.uiElements)
     }
 
     private fun findValidationInOriginalConfig(edge: StatefulEdge): UIOperation.ValidateElement? {
