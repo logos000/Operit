@@ -29,10 +29,19 @@
             ]
         },
         {
-            "name": "StoryVideoActivity",
-            "description": "StoryVideoActivity",
-            "activityName": "com.bilibili.video.story.StoryVideoActivity",
-            "nodeType": "LIST_PAGE"
+            "name": "搜索列表",
+            "description": "确认搜索后的界面",
+            "nodeType": "LIST_PAGE",
+            "matchCriteria": [
+                {
+                    "type": "ByText",
+                    "value": "搜索"
+                },
+                {
+                    "type": "ByText",
+                    "value": "综合"
+                }
+            ]
         },
         {
             "name": "InnerAppContainerActivity",
@@ -70,21 +79,29 @@
                         "type": "ByResourceId",
                         "value": "search_text"
                     },
-                    "description": "点击 '82万 291 2:32 现在的带货视频是把观众当日本人耍呢？ 竖屏 一棵苏铁'"
+                    "description": "点击搜索框"
                 }
             ]
         },
         {
-            "from": "MainActivityV2",
-            "to": "InnerAppContainerActivity",
+            "from": "搜索界面",
+            "to": "搜索列表",
             "operations": [
+                {
+                    "type": "Input",
+                    "selector": {
+                        "type": "ByResourceId",
+                        "value": "search_plate"
+                    },
+                    "description": "输入文本"
+                },
                 {
                     "type": "Click",
                     "selector": {
-                        "type": "ByText",
-                        "value": "夸克，我真是小看你了...... 190万人感兴趣"
+                        "type": "ByResourceId",
+                        "value": "action_search"
                     },
-                    "description": "点击 '夸克，我真是小看你了...... 190万人感兴趣'"
+                    "description": "点击搜索"
                 }
             ]
         },

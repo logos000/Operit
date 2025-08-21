@@ -43,9 +43,9 @@ class UINode {
     /**
      * Create a new UINode instance
      * @param {Object} node - The SimplifiedUINode object to wrap
-     * @param {UINode|null} parent - The parent UINode (null for root)
+     * @param {UINode|undefined} parent - The parent UINode (undefined for root)
      */
-    constructor(node, parent = null) {
+    constructor(node, parent = undefined) {
         this._node = node || {};
         this._children = undefined;
         this._parent = parent;
@@ -111,7 +111,7 @@ class UINode {
 
     /**
      * Get the parent node
-     * @return {UINode|null} Parent node or null if this is the root
+     * @return {UINode|undefined} Parent node or undefined if this is the root
      */
     get parent() {
         return this._parent;
@@ -569,7 +569,7 @@ class UINode {
     /**
      * Find closest ancestor that matches the criteria
      * @param {Object|Function} criteria - Search criteria or predicate function
-     * @return {UINode|null} The matching ancestor or null if none found
+     * @return {UINode|undefined} The matching ancestor or undefined if none found
      */
     closest(criteria) {
         let currentNode = this.parent;
@@ -587,7 +587,7 @@ class UINode {
             currentNode = currentNode.parent;
         }
 
-        return null;
+        return undefined;
     }
 
     // ===== Actions =====

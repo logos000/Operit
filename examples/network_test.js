@@ -360,7 +360,7 @@ const networkTest = (function () {
     async function formatResponse(response) {
         try {
             let responseBody = '';
-            let jsonData = null;
+            let jsonData = undefined;
             // 获取响应文本
             responseBody = response.content;
             console.log(`\n===== 响应内容开始 =====`);
@@ -402,7 +402,7 @@ const networkTest = (function () {
                             }
                             // 输出完整的JSON格式化数据
                             console.log(`\nJSON完整数据:`);
-                            console.log(JSON.stringify(jsonData, null, 2));
+                            console.log(JSON.stringify(jsonData, undefined, 2));
                         }
                         else {
                             console.log(`- 基本类型数据: ${JSON.stringify(jsonData).substring(0, 100)}`);
@@ -682,10 +682,10 @@ const networkTest = (function () {
     async function network_wrap(func, params, successMessage, failMessage, additionalInfo = "") {
         try {
             console.log(`开始执行函数: ${func.name || '匿名函数'}`);
-            console.log(`参数:`, JSON.stringify(params, null, 2));
+            console.log(`参数:`, JSON.stringify(params, undefined, 2));
             // 执行原始函数
             const result = await func(params);
-            console.log(`函数 ${func.name || '匿名函数'} 执行结果:`, JSON.stringify(result, null, 2));
+            console.log(`函数 ${func.name || '匿名函数'} 执行结果:`, JSON.stringify(result, undefined, 2));
             // 如果原始函数已经调用了complete，就不需要再次调用
             if (result === undefined)
                 return;
