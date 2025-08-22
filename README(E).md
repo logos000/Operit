@@ -132,7 +132,7 @@ Join the Operit open-source ecosystem! We welcome all types of contributors, whe
 
 For this repository, you must download some dependency libraries from `https://drive.google.com/drive/folders/1g-Q_i7cf6Ua4KX9ZM6V282EEZvTVVfF7?usp=sharing` and place them in folders with .keep files
 
-**Check out our [Contribution Guide](docs/CONTRIBUTING.md) and [Script Development Guide (Chinese)](docs/DEV_GUIDE.md) to learn how to get involved.**
+**Check out our [Contribution Guide](docs/CONTRIBUTING.md) and [Script Development Guide (Chinese)](docs/SCRIPT_DEV_GUIDE.md) to learn how to get involved.**
 
 ## 📝 Feedback (Issues)
 

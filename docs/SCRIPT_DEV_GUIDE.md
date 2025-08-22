@@ -6,11 +6,134 @@
 
 脚本主要使用 **TypeScript** 编写，以利用其强大的类型系统，但也可以使用原生 JavaScript (ES6+)。
 
-## 2. 开发环境搭建
+## 2. 快速上手
 
-对于希望从零开始搭建开发环境的开发者，本章节将指导你完成项目的初始化、依赖安装和 TypeScript 的配置。
+我们为开发者提供了两种不同的开发路径，你可以根据自己的需求选择最合适的一种。
 
-### 2.1. 初始化项目与依赖 (`package.json`)
+*   **路径 A：在 Operit 项目中直接开发 (推荐)**: 这是最简单快捷的方式，无需手动配置环境。适合想要快速编写脚本并贡献给主项目的开发者。
+*   **路径 B：创建独立的脚本项目 (高级)**: 如果你想创建和维护自己的脚本仓库，或者将脚本作为独立产品发布，可以选择此路径。这需要你手动完成项目的搭建。
+
+---
+
+### 路径 A: 在 Operit 项目中直接开发 (5分钟快速入门)
+
+这是最推荐的入门方式。Operit 项目本身就是一个功能完备的开发环境，让你免于手动配置。
+
+**步骤 1: 克隆项目并安装依赖**
+
+```bash
+# 克隆项目仓库
+git clone https://github.com/NakiriRuri/assistance.git
+cd assistance
+
+# 安装项目依赖 (主要是TypeScript编译器)
+npm install
+```
+
+**步骤 2: 创建你的第一个脚本**
+
+所有的脚本都存放在 `examples/` 目录下。请在该目录中创建一个新文件，例如 `my_first_script.ts`，然后将下面的代码复制进去。
+
+```typescript
+/*
+METADATA
+{
+    "name": "MyFirstScript",
+    "description": "我的第一个脚本，用于演示。",
+    "category": "TUTORIAL",
+    "tools": [
+        {
+            "name": "hello_world",
+            "description": "向世界问好。",
+            "parameters": [
+                {
+                    "name": "name",
+                    "description": "要问好的人名",
+                    "type": "string",
+                    "required": true
+                }
+            ]
+        }
+    ]
+}
+*/
+
+// 引用核心类型，这会给你带来代码自动补全的奇效
+/// <reference path="./types/index.d.ts" />
+
+// 这是一个标准的脚本结构，建议你直接复用
+const MyFirstScript = (function () {
+    // 包装函数，统一处理成功/失败的返回
+    async function wrap(func: (params: any) => Promise<any>, params: any) {
+        try {
+            const result = await func(params);
+            complete(result); // 必须调用 complete() 来结束脚本
+        } catch (error) {
+            complete({ success: false, message: `执行失败: ${error.message}` });
+        }
+    }
+
+    // 这是你工具的具体实现
+    async function hello_world(params: { name: string }): Promise<any> {
+        const message = `你好, ${params.name}! 欢迎来到 Operit 脚本世界。`;
+        await Tools.System.sleep(500); // 调用内置API
+        return { success: true, message: message };
+    }
+
+    // 导出你的工具，使其可以被调用
+    return {
+        hello_world: (params: any) => wrap(hello_world, params),
+    };
+})();
+
+// 将工具函数暴露给脚本执行引擎
+exports.hello_world = MyFirstScript.hello_world;
+```
+
+**步骤 3: 编译脚本**
+
+TypeScript (`.ts`) 文件需要被编译成 JavaScript (`.js`) 才能执行。
+
+```bash
+# 进入 examples 目录
+cd examples
+
+# 编译你的脚本 (npx 会使用项目中安装的 typescript 版本)
+npx tsc my_first_script.ts
+```
+
+执行成功后，你会看到同目录下生成了一个 `my_first_script.js` 文件。
+
+**步骤 4: 在设备上运行脚本**
+
+确保你已连接安卓设备并开启了USB调试。然后返回项目根目录，使用我们提供的工具来执行脚本。
+
+```bash
+# 回到项目根目录
+cd ..
+
+# 执行脚本的 `hello_world` 函数
+# Windows:
+tools\\execute_js.bat examples\\my_first_script.js hello_world "{\\"name\\":\\"世界\\"}"
+# Linux / macOS:
+./tools/execute_js.sh examples/my_first_script.js hello_world '{"name":"世界"}'
+```
+
+**步骤 5: 查看结果**
+
+脚本会自动拉起设备的日志。如果一切顺利，你会在终端看到包含 `"你好, 世界!..."` 的成功信息。
+
+**恭喜你！**
+
+你已经完成了第一个脚本的开发和运行。现在你已经掌握了基础，可以继续深入探索 **[第 3 章：核心概念](#3-核心概念)** 来学习 `METADATA` 的详细配置和 `Tools` API 的更多用法，或者直接跳到 **[第 5 章：UI自动化详解](#5-ui自动化详解)** 编写更强大的自动化脚本。
+
+---
+
+### 路径 B: 创建独立的脚本项目
+
+如果你希望独立管理你的脚本，可以按照以下步骤从零开始搭建一个开发环境。
+
+#### 2.1. 初始化项目与依赖 (`package.json`)
 
 `package.json` 文件是 Node.js 项目的清单，用于管理项目的元数据和依赖项。
 
@@ -44,7 +167,7 @@ npm install
 
 此命令会根据 `package.json` 中的 `devDependencies` 下载 `typescript` 和 Node.js 的类型定义。
 
-### 2.2. 配置 TypeScript (`tsconfig.json`)
+#### 2.2. 配置 TypeScript (`tsconfig.json`)
 
 `tsconfig.json` 文件用于指定 TypeScript 编译器的选项，告诉它如何将 `.ts` 文件编译成 `.js` 文件。
 
@@ -98,7 +221,7 @@ npm install
 
 完成以上步骤后，你的项目就搭建好了。现在你可以继续阅读后续章节，了解项目的具体结构和脚本的编写方法。
 
-### 2.3. 复制平台核心文件
+#### 2.3. 复制平台核心文件
 
 为了让你的脚本能与平台交互，并能在设备上执行，你需要从本开发指南所在的源项目（即 `assistance` 项目）中复制一些核心文件到你的新项目里。
 
@@ -132,16 +255,11 @@ my-script-project/
 
 现在，你的开发环境已经完全准备就绪。
 
-## 3. 项目结构
-
--   `examples/`：(在源项目中) 存放所有自动化脚本的源文件。每个功能包通常包含一个 `.ts` (TypeScript 源码) 和一个编译后的 `.js` 文件。
--   `examples/types/`：(在源项目中) 包含了所有核心 API 和工具的 TypeScript 类型定义（`.d.ts` 文件）。这些文件对于获得代码智能提示和类型检查至_关重要，也就是你需要复制到新项目 `types/` 目录中的文件_。
-
-## 4. 核心概念
+## 3. 核心概念
 
 在开始编写脚本之前，理解以下几个核心概念非常重要：
 
-### 4.1. 脚本元数据 (METADATA)
+### 3.1. 脚本元数据 (METADATA)
 
 每个脚本文件的开头都必须包含一个 `/* METADATA ... */` 注释块。这个块定义了脚本的名称、描述、分类以及最重要的——它所提供的工具。**这块元数据是 Operit AI 理解并调用你所编写功能的唯一途径。AI 会解析 `METADATA` 中的信息，将其作为可用的“工具”呈现给大语言模型（LLM），从而实现通过自然语言指令来执行复杂脚本的能力。**
 
@@ -182,7 +300,7 @@ METADATA
     -   `description`: 工具功能的描述。
     -   `parameters`: 工具接受的参数列表，每个参数都应定义 `name`, `description`, `type`, 和 `required`。
 
-### 4.2. 脚本执行与结束
+### 3.2. 脚本执行与结束
 
 脚本中的每个工具函数都是异步的。当工具函数完成其任务后，**必须**调用全局的 `complete()` 函数来结束执行并返回结果。
 
@@ -213,15 +331,15 @@ async function get_current_date(params: {}) {
 
 为了简化代码，大多数脚本都使用了一个包装函数（例如 `wrap` 或 `wrapToolExecution`）来统一处理 `try...catch` 和 `complete()` 的调用。
 
-### 4.3. 使用内置工具 (Tools)
+### 3.3. 使用内置工具 (Tools)
 
-平台提供了一个全局的 `Tools` 对象，它包含了所有与底层系统交互的API。这些API被分类到不同的命名空间下 (点击链接查看详细文档):
+平台提供了一个全局的 `Tools` 对象，它包含了所有与底层系统交互的API。这些API被分类到不同的命名空间下:
 
--   [`Tools.System`](./package_dev/system.md): 系统级操作，如 `sleep()`, `startApp()`, `stopApp()`。
--   [`Tools.UI`](./package_dev/ui.md): UI自动化操作，如 `getPageInfo()`, `pressKey()`, `swipe()`, `setText()`。
--   [`Tools.Files`](./package_dev/files.md): 文件系统操作，如 `read()`, `write()`, `list()`。
--   [`Tools.Network`](./package_dev/network.md): 网络请求，如 `httpGet()`, `httpPost()`。
--   [`UINode`](./package_dev/ui.md#uinode-类详解): 用于表示和操作UI元素的类 (详情见UI文档)。
+-   `Tools.System`: 系统级操作，如 `sleep()`, `startApp()`, `stopApp()`。
+-   `Tools.UI`: UI自动化操作，如 `getPageInfo()`, `pressKey()`, `swipe()`, `setText()`。
+-   `Tools.Files`: 文件系统操作，如 `read()`, `write()`, `list()`。
+-   `Tools.Network`: 网络请求，如 `httpGet()`, `httpPost()`。
+-   `UINode`: 用于表示和操作UI元素的类。
 
 所有这些工具函数都是**异步**的，调用时必须使用 `await`。
 
@@ -237,13 +355,13 @@ const pageInfo = await Tools.UI.getPageInfo();
 await Tools.UI.swipe(540, 1800, 540, 900);
 ```
 
-## 5. 编写第一个脚本 (TypeScript)
+## 4. 编写第一个脚本 (TypeScript)
 
-推荐使用 TypeScript 来编写脚本，这样可以充分利用 `examples/types/` 中提供的类型定义，获得更好的开发体验。
+推荐使用 TypeScript 来编写脚本，这样可以充分利用 `types/` 目录中提供的类型定义，获得更好的开发体验。
 
 ### 步骤 1: 创建 `.ts` 文件
 
-在 `examples/` 目录下创建一个新的 `.ts` 文件，例如 `my_new_script.ts`。
+在你选择的脚本目录下创建一个新的 `.ts` 文件，例如 `my_new_script.ts`。
 
 ### 步骤 2: 添加元数据
 
@@ -323,9 +441,9 @@ exports.hello_world = MyNewScript.hello_world;
 ### 步骤 4: 使用类型
 
 -   在文件顶部添加 `/// <reference path="./types/index.d.ts" />` 可以让 TypeScript 编译器和你的IDE（如 VS Code）找到全局的类型定义。
--   `examples/types/` 目录下的 `.d.ts` 文件详细定义了所有可用工具的签名和返回类型。例如，`types/system.d.ts` 中定义了 `Tools.System.sleep` 的参数和返回值。
+-   `types/` 目录下的 `.d.ts` 文件详细定义了所有可用工具的签名和返回类型。例如，`types/system.d.ts` 中定义了 `Tools.System.sleep` 的参数和返回值。
 
-## 6. UI自动化详解
+## 5. UI自动化详解
 
 UI自动化是许多脚本的核心。
 
@@ -368,31 +486,27 @@ if (loginButton) {
 }
 ```
 
-## 7. 调试
+## 6. 调试
 
 -   使用 `console.log()`、`console.error()` 等函数输出日志。日志信息可以在执行环境中查看。
 -   将复杂的逻辑拆分成小函数，并为每个函数添加清晰的日志输出。
 -   在执行UI操作后，加入适当的 `Tools.System.sleep()` 来等待UI更新，避免操作过快导致失败。
 
-## 8. API 参考
-
-关于所有可用工具和类型的详细 API 文档，请参阅 [`docx/package_dev`](./package_dev/) 目录。该目录为每个核心模块都提供了独立的 Markdown 文档，详细解释了所有可用的函数、类和类型。
-
-## 9. 编译
+## 7. 编译
 
 TypeScript 脚本 (`.ts`) 需要被编译成 JavaScript (`.js`)才能被执行。项目已配置好 `tsconfig.json`，通常可以使用 `tsc` 命令来编译所有脚本。 
 
-## 10. 在设备上运行和测试脚本
+## 8. 在设备上运行和测试脚本
 
 当你编写完脚本并将其编译成 JavaScript 后，可以使用 `tools/` 目录下的辅助脚本通过 ADB (Android Debug Bridge) 在连接的安卓设备上运行它。
 
-### 10.1. 前提条件
+### 8.1. 前提条件
 
 - **Android SDK (ADB)**: 确保你已经安装了 Android SDK，并且 `adb` 命令在你的系统路径中可用。
 - **安卓设备**: 连接一台开启了“USB调试”功能的安卓设备，并已授权电脑进行调试。
 - **Operit 应用程序**: 确保 `com.ai.assistance.operit` 应用程序已经安装并在目标设备上运行。脚本的执行依赖于应用内的 `ScriptExecutionReceiver` 来接收和处理来自 ADB 的命令。
 
-### 10.2. 执行脚本函数
+### 8.2. 执行脚本函数
 
 `tools` 目录下提供了 `execute_js.bat` (Windows) 和 `execute_js.sh` (Linux/macOS) 脚本来简化执行流程。
 
@@ -415,7 +529,7 @@ tools\\execute_js.bat examples\\my_new_script.js hello_world "{\\"name\\":\\"世
 - 如果连接了多台设备，脚本会提示你选择要操作的设备。
 - 注意：在 Windows `cmd` 中，JSON 字符串中的双引号需要使用 `\` 来转义。
 
-### 10.3. 查看输出和调试
+### 8.3. 查看输出和调试
 
 脚本执行后，`console.log` 的输出以及 `complete()` 函数返回的结果会打印到设备的日志中。你可以使用 `adb logcat` 来查看这些信息。
 
@@ -435,7 +549,7 @@ I/JsEngine: Script execution completed.
 
 这样就完成了一个从编写到设备上测试的完整开发循环。 
 
-### 10.4. VS Code 集成 (推荐)
+### 8.4. VS Code 集成 (推荐)
 
 为了进一步简化开发流程，项目预置了 VS Code 的启动配置，让你可以直接在编辑器内一键运行和测试脚本。
 
@@ -451,13 +565,13 @@ I/JsEngine: Script execution completed.
 
 VS Code 会自动打开一个新的终端面板，并执行相应的脚本，你可以在该面板中看到 `adb logcat` 的实时输出。这个集成化的工作流极大地提升了开发和调试的效率。 
 
-## 11. VS Code 配置 (可选)
+## 9. VS Code 配置 (可选)
 
 为了安全和避免不同开发者环境的冲突，`.vscode` 文件夹通常会被添加到 `.gitignore` 中，本项目也不例外。这意味着 `launch.json` 和 `tasks.json` 这两个配置文件不会被提交到版本控制中。
 
 如果你想使用上一章节描述的 VS Code 一键启动功能，你需要手动在项目根目录创建这些文件。
 
-### 11.1. 创建 tasks.json
+### 9.1. 创建 tasks.json
 
 1.  在项目根目录创建一个名为 `.vscode` 的文件夹。
 2.  在 `.vscode` 文件夹内，创建一个名为 `tasks.json` 的文件。
@@ -562,7 +676,7 @@ VS Code 会自动打开一个新的终端面板，并执行相应的脚本，你
 }
 ```
 
-### 11.2. 创建 launch.json
+### 9.2. 创建 launch.json
 
 1.  同样在 `.vscode` 文件夹内，创建一个名为 `launch.json` 的文件。
 2.  将以下内容复制并粘贴到 `launch.json` 文件中：

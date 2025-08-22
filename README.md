@@ -115,7 +115,7 @@ Operit AI 提供丰富的插件生态，配合内置工具可实现从日常生�
 对于本仓库，你必须从`https://drive.google.com/drive/folders/1g-Q_i7cf6Ua4KX9ZM6V282EEZvTVVfF7?usp=sharing`下载一些依赖库，并放入有.keep的文件夹
 
 
-**查看我们的 [开源共创指南](docs/CONTRIBUTING.md) 和 [脚本开发指南](docs/DEV_GUIDE.md) 了解如何参与项目开发。**
+**查看我们的 [开源共创指南](docs/CONTRIBUTING.md) 和 [脚本开发指南](docs/SCRIPT_DEV_GUIDE.md) 了解如何参与项目开发。**
 
 ## 💖 贡献者
 
