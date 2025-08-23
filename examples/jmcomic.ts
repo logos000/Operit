@@ -434,7 +434,7 @@ const jmcomic = (function () {
     }
 
     class JmApiResp {
-        constructor(private resp: Response, private ts: number) { }
+        constructor(private resp: OkHttpResponse, private ts: number) { }
 
         get isSuccess(): boolean {
             return this.resp.isSuccessful();

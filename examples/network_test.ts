@@ -408,7 +408,7 @@ const networkTest = (function () {
      * 格式化响应结果
      * @param response - OkHttp响应
      */
-    async function formatResponse(response: Response): Promise<any> {
+    async function formatResponse(response: OkHttpResponse): Promise<any> {
         try {
             let responseBody = '';
             let jsonData: any = undefined;
@@ -433,8 +433,6 @@ const networkTest = (function () {
             if (response.contentType && response.contentType.includes('application/json')) {
                 try {
                     jsonData = await response.json();
-                    // 输出解析后的JSON内容摘要
-                    console.log(`\nJSON解析成功: ${response.url || ''}`);
                     if (jsonData) {
                         if (Array.isArray(jsonData)) {
                             console.log(`- 数组数据, 长度: ${(jsonData as any[]).length}`);
