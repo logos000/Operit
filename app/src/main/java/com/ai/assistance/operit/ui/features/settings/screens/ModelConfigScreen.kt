@@ -574,6 +574,17 @@ fun ModelConfigScreen(onBackPressed: () -> Unit = {}) {
                         selectedConfigId = configId
                         showOneClickConfig = false
                         showNotification("一键配置成功！")
+                        
+                        // 检查默认配置的API Key是否为空或为DEFAULT_API_KEY，如果是则更新为123456
+                        val defaultConfig = configManager.getModelConfigFlow("default").first()
+                        if (defaultConfig.apiKey.isBlank() || 
+                            defaultConfig.apiKey == ApiPreferences.DEFAULT_API_KEY ||
+                            defaultConfig.apiKey == ApiPreferences.DEFAULT_API_KEY_OLD) {
+                            
+                            val updatedDefaultConfig = defaultConfig.copy(apiKey = "123456")
+                            configManager.saveModelConfig(updatedDefaultConfig)
+                            showNotification("一键配置成功！默认配置已标记为已使用自己的API")
+                        }
                     }
                 }
             )
